@@ -1,0 +1,331 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Arduinium — design system</title>
+
+<!--
+  Self-contained reference. Double-click it; no build, no server.
+
+  The React app in `app/` and `components/` is the SOURCE OF TRUTH — the tokens
+  here are copied from `app/globals.css` (@theme). If the two ever disagree,
+  the app is right and this file is stale.
+
+  Webfonts are linked rather than embedded, so opened offline this degrades to
+  the system stack. That is fine for a reference sheet; the shipped app
+  self-hosts them through next/font.
+-->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Manrope:wght@400;500;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+
+<style>
+:root{
+  /* ---- Section 4.1 palette — the only colours in the product ---- */
+  --navy:#1C3547; --navy-2:#28495F; --bg:#F8F1DE; --bg-alt:#F1E7CC;
+  --card:#FFFCF4; --orange:#D9612F; --teal:#1E8F82; --slate:#7E93A7;
+  --gray:#8D8D89; --pink:#D6247A;
+
+  --display:'Space Grotesk','Segoe UI',system-ui,sans-serif;
+  --sans:'Manrope','Segoe UI',system-ui,sans-serif;
+  --mono:'JetBrains Mono',ui-monospace,Consolas,monospace;
+
+  --hard-sm:2px 2px 0 var(--navy);
+  --hard:3px 3px 0 var(--navy);
+  --hard-lg:5px 5px 0 var(--navy);
+}
+
+*{box-sizing:border-box}
+body{
+  margin:0;background:var(--bg);color:var(--navy);
+  font-family:var(--sans);font-size:15.5px;line-height:1.62;
+  -webkit-font-smoothing:antialiased;
+  background-image:radial-gradient(circle at center,rgba(28,53,71,.16) 1.2px,transparent 1.3px);
+  background-size:26px 26px;background-position:13px 13px;
+}
+h1,h2,h3{font-family:var(--display);letter-spacing:-.02em;line-height:1.1;margin:0}
+:focus-visible{outline:3px solid var(--orange);outline-offset:2px;border-radius:4px}
+
+.wrap{max-width:1080px;margin:0 auto;padding:0 24px}
+header.top{border-bottom:2px solid var(--navy);background:rgba(248,241,222,.9);backdrop-filter:blur(8px);position:sticky;top:0;z-index:10}
+header.top .wrap{display:flex;align-items:center;justify-content:space-between;height:62px}
+.brand{font-family:var(--display);font-weight:700;text-transform:uppercase;letter-spacing:.14em;font-size:19px}
+.stamp{font-family:var(--mono);font-size:11px;text-transform:uppercase;letter-spacing:.12em;color:rgba(28,53,71,.5)}
+
+section{padding:56px 0;border-bottom:2px solid rgba(28,53,71,.12)}
+.eyebrow{display:flex;align-items:center;gap:10px;font-family:var(--mono);font-size:12px;font-weight:700;
+  text-transform:uppercase;letter-spacing:.16em;color:var(--teal);margin-bottom:14px}
+h2{font-size:30px;margin-bottom:10px}
+.lede{max-width:62ch;color:rgba(28,53,71,.72);margin:0 0 28px}
+.note{max-width:70ch;font-size:14px;color:rgba(28,53,71,.66);
+  border-left:3px solid var(--orange);padding:2px 0 2px 14px;margin:22px 0}
+
+/* solder pad — the logo's apex detail, reused at UI scale */
+.pad{display:inline-grid;place-items:center;width:18px;height:18px;flex:none;
+  border:2px solid var(--navy);border-radius:50%;background:var(--teal)}
+.pad i{width:6px;height:6px;border-radius:50%;background:var(--orange);display:block}
+
+/* ---------------------------------------------------------- colour ---- */
+.swatches{display:grid;gap:14px;grid-template-columns:repeat(auto-fill,minmax(210px,1fr))}
+.sw{border:2px solid var(--navy);border-radius:12px;overflow:hidden;background:var(--card);box-shadow:var(--hard)}
+.sw .chip{height:76px;border-bottom:2px solid var(--navy)}
+.sw .meta{padding:11px 13px}
+.sw .name{font-family:var(--display);font-weight:700;font-size:14.5px}
+.sw .hex{font-family:var(--mono);font-size:12px;color:rgba(28,53,71,.6);text-transform:uppercase}
+.sw .use{font-size:12.5px;color:rgba(28,53,71,.65);margin-top:5px;display:block;line-height:1.45}
+
+/* ---------------------------------------------------------- buttons --- */
+.btn{
+  display:inline-flex;align-items:center;justify-content:center;gap:8px;
+  height:44px;padding:0 20px;border:2px solid var(--navy);border-radius:10px;
+  font-family:var(--display);font-weight:800;font-size:14px;
+  text-transform:uppercase;letter-spacing:.03em;cursor:pointer;
+  box-shadow:var(--hard);
+  transition:transform .08s ease,box-shadow .08s ease,background-color .08s ease;
+}
+.btn:active{transform:translate(3px,3px);box-shadow:none}
+.btn--primary{background:var(--orange);color:#fff}
+.btn--secondary{background:var(--navy);color:var(--bg);box-shadow:3px 3px 0 var(--orange)}
+.btn--outline{background:var(--card);color:var(--navy)}
+.btn--teal{background:var(--teal);color:#fff}
+.btn--ghost{background:transparent;border-color:transparent;box-shadow:none;text-transform:none;letter-spacing:0;font-weight:700}
+.btn--ghost:active{transform:none}
+.btn:disabled{opacity:.45;box-shadow:none;transform:translate(3px,3px);cursor:not-allowed}
+.btn--lg{height:52px;padding:0 28px;font-size:15.5px}
+.btn--sm{height:36px;padding:0 14px;font-size:12.5px}
+.row{display:flex;flex-wrap:wrap;gap:14px;align-items:center}
+
+/* ---------------------------------------------------------- surfaces -- */
+.cards{display:grid;gap:18px;grid-template-columns:repeat(auto-fit,minmax(250px,1fr))}
+.card{border:2px solid var(--navy);border-radius:14px;padding:22px;box-shadow:var(--hard);background:var(--card)}
+.card--alt{background:var(--bg-alt)}
+.card--navy{background:var(--navy);color:var(--bg)}
+.card--navy .k{color:rgba(248,241,222,.6)}
+.k{font-family:var(--mono);font-size:11px;text-transform:uppercase;letter-spacing:.12em;color:rgba(28,53,71,.55)}
+
+/* ---------------------------------------------------------- inputs ---- */
+.field{display:flex;flex-direction:column;gap:6px;max-width:340px}
+.input{
+  width:100%;border:2px solid var(--navy);border-radius:9px;background:var(--bg-alt);
+  padding:10px 14px;font:inherit;font-size:15px;color:var(--navy);
+  box-shadow:inset 2px 2px 0 rgba(28,53,71,.12);
+}
+.input:focus{background:var(--card);outline:3px solid var(--orange);outline-offset:2px}
+
+/* ---------------------------------------------------------- badges ---- */
+.badge{display:inline-block;border:2px solid var(--navy);border-radius:6px;padding:2px 8px;
+  font-family:var(--mono);font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:#fff}
+.badge--teal{background:var(--teal)} .badge--orange{background:var(--orange)}
+.badge--pink{background:var(--pink)} .badge--navy{background:var(--navy);color:var(--bg)}
+.badge--ghost{background:transparent;color:rgba(28,53,71,.55);border-color:rgba(28,53,71,.25)}
+
+/* ---------------------------------------------------------- type ------ */
+.type div{margin-bottom:16px}
+.t-h1{font-family:var(--display);font-weight:700;font-size:clamp(2.3rem,5vw,4rem);letter-spacing:-.02em;line-height:1.04}
+.t-h2{font-family:var(--display);font-weight:700;font-size:30px}
+.t-h3{font-family:var(--display);font-weight:700;font-size:19px}
+.t-body{font-size:15.5px;line-height:1.62;max-width:64ch}
+.t-mono{font-family:var(--mono);font-size:12px;text-transform:uppercase;letter-spacing:.16em;color:var(--teal);font-weight:700}
+
+/* ---------------------------------------------------------- motion ---- */
+.grad{position:relative;height:200px;border:2px solid var(--navy);border-radius:14px;overflow:hidden;box-shadow:var(--hard);background:var(--bg)}
+.grad i{position:absolute;border-radius:50%;filter:blur(50px);display:block}
+.grad .a{width:44%;height:150%;left:-6%;top:-40%;background:rgba(217,97,47,.34);animation:da 19s ease-in-out infinite alternate}
+.grad .b{width:38%;height:140%;right:-4%;top:-10%;background:rgba(30,143,130,.32);animation:db 23s ease-in-out infinite alternate}
+.grad .c{width:50%;height:90%;left:24%;bottom:-40%;background:rgba(40,73,95,.22);animation:dc 27s ease-in-out infinite alternate}
+@keyframes da{to{transform:translate3d(14%,9%,0) scale(1.18)}}
+@keyframes db{to{transform:translate3d(-12%,12%,0) scale(.92)}}
+@keyframes dc{to{transform:translate3d(-16%,-7%,0) scale(1.22)}}
+
+.perf{height:120px;border:2px solid var(--navy);border-radius:14px;box-shadow:var(--hard);background:var(--bg-alt);
+  background-image:radial-gradient(circle at center,rgba(28,53,71,.22) 1.1px,transparent 1.2px);background-size:16px 16px}
+
+@media (prefers-reduced-motion:reduce){.grad i{animation:none}}
+footer{padding:38px 0 60px;font-size:13px;color:rgba(28,53,71,.55)}
+table{border-collapse:collapse;width:100%;font-size:14px}
+th,td{text-align:left;padding:9px 12px;border-bottom:2px solid rgba(28,53,71,.1)}
+th{font-family:var(--mono);font-size:11px;text-transform:uppercase;letter-spacing:.1em;color:rgba(28,53,71,.55)}
+code{font-family:var(--mono);font-size:12.5px;background:var(--bg-alt);border:1px solid rgba(28,53,71,.15);border-radius:4px;padding:1px 5px}
+</style>
+</head>
+<body>
+
+<header class="top">
+  <div class="wrap">
+    <span class="brand">Arduinium</span>
+    <span class="stamp">Design system · reference</span>
+  </div>
+</header>
+
+<div class="wrap">
+
+  <section>
+    <div class="eyebrow"><span class="pad"><i></i></span> Colour</div>
+    <h2>Ten tokens, fixed meanings</h2>
+    <p class="lede">Every colour in the product traces back to one of these. There are no
+    ad-hoc hex values in components — the palette is declared once, in
+    <code>app/globals.css</code> under <code>@theme</code>.</p>
+
+    <div class="swatches">
+      <div class="sw"><div class="chip" style="background:#1C3547"></div><div class="meta">
+        <div class="name">navy</div><div class="hex">#1C3547</div>
+        <span class="use">Primary text, every border, dark surfaces, all hard shadows.</span></div></div>
+      <div class="sw"><div class="chip" style="background:#28495F"></div><div class="meta">
+        <div class="name">navy-2</div><div class="hex">#28495F</div>
+        <span class="use">Lighter navy. Hover state on dark surfaces.</span></div></div>
+      <div class="sw"><div class="chip" style="background:#F8F1DE"></div><div class="meta">
+        <div class="name">bg</div><div class="hex">#F8F1DE</div>
+        <span class="use">Page background. The ground everything sits on.</span></div></div>
+      <div class="sw"><div class="chip" style="background:#F1E7CC"></div><div class="meta">
+        <div class="name">bg-alt</div><div class="hex">#F1E7CC</div>
+        <span class="use">Alternating sections, input fills.</span></div></div>
+      <div class="sw"><div class="chip" style="background:#FFFCF4"></div><div class="meta">
+        <div class="name">card</div><div class="hex">#FFFCF4</div>
+        <span class="use">Card and panel background.</span></div></div>
+      <div class="sw"><div class="chip" style="background:#D9612F"></div><div class="meta">
+        <div class="name">orange</div><div class="hex">#D9612F</div>
+        <span class="use">Power / LED. Primary CTA, active nav, the lit dot.</span></div></div>
+      <div class="sw"><div class="chip" style="background:#1E8F82"></div><div class="meta">
+        <div class="name">teal</div><div class="hex">#1E8F82</div>
+        <span class="use">Signal / circuit / success. Eyebrows, ticks, solder pads.</span></div></div>
+      <div class="sw"><div class="chip" style="background:#7E93A7"></div><div class="meta">
+        <div class="name">slate</div><div class="hex">#7E93A7</div>
+        <span class="use">Neutral UI accents.</span></div></div>
+      <div class="sw"><div class="chip" style="background:#8D8D89"></div><div class="meta">
+        <div class="name">gray</div><div class="hex">#8D8D89</div>
+        <span class="use">Muted text, disabled states.</span></div></div>
+      <div class="sw"><div class="chip" style="background:#D6247A"></div><div class="meta">
+        <div class="name">pink</div><div class="hex">#D6247A</div>
+        <span class="use">Achievements only. Used exactly twice in the whole product.</span></div></div>
+    </div>
+
+    <p class="note"><strong>Known contrast caveat.</strong> White on <code>orange</code>
+    measures ~3.7:1 — below WCAG AA for small text, above the 3:1 large-text
+    threshold. Primary CTAs therefore use bold 15–16px and never smaller.
+    Where a long string needs orange, use <code>btn--secondary</code> instead:
+    navy fill with an orange shadow keeps the accent at ~13:1 text contrast.</p>
+  </section>
+
+  <section>
+    <div class="eyebrow"><span class="pad"><i></i></span> Typography</div>
+    <h2>Three faces, one job each</h2>
+    <p class="lede">Space Grotesk carries headings — a geometric grotesk with odd terminals,
+    so titles read technical rather than as the default Inter every startup page uses.
+    Manrope carries body copy. JetBrains Mono carries the engineering register:
+    eyebrows, pin labels, durations, code.</p>
+
+    <div class="type">
+      <div><span class="k">Display 700 · clamp(2.3rem, 5vw, 4rem)</span>
+        <div class="t-h1">Arduino kerak emas</div></div>
+      <div><span class="k">Display 700 · 30px</span>
+        <div class="t-h2">Taqlid emas — ishlaydigan ustaxona</div></div>
+      <div><span class="k">Display 700 · 19px</span>
+        <div class="t-h3">Haqiqiy fizika</div></div>
+      <div><span class="k">Body 400 · 15.5px / 1.62</span>
+        <p class="t-body">Robotni yig‘ing, simlarni o‘z qo‘lingiz bilan ulang, dastur
+        yozing va uni haqiqiy fizikada haydang. Hammasi brauzerda, bitta ham
+        detal sotib olmasdan.</p></div>
+      <div><span class="k">Mono 700 · 12px · .16em</span>
+        <div class="t-mono">Nimasi boshqacha</div></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="eyebrow"><span class="pad"><i></i></span> The signature element</div>
+    <h2>Hard-shadow buttons</h2>
+    <p class="lede">One offset solid shadow, and on press the element travels exactly that
+    distance into it. The button physically moves rather than dimming or scaling —
+    that is the whole retro-arcade read, and it is why the UI feels designed rather
+    than assembled. <strong>Press one.</strong></p>
+
+    <div class="row" style="margin-bottom:18px">
+      <button class="btn btn--primary">Sinov maydonini ochish</button>
+      <button class="btn btn--secondary">Maktabim uchun</button>
+      <button class="btn btn--outline">Tugallandi deb belgilash</button>
+      <button class="btn btn--teal">Tugallandi</button>
+      <button class="btn btn--ghost">Bekor qilish</button>
+      <button class="btn btn--outline" disabled>Disabled</button>
+    </div>
+    <div class="row">
+      <button class="btn btn--primary btn--sm">Small · 36px</button>
+      <button class="btn btn--primary">Medium · 44px</button>
+      <button class="btn btn--primary btn--lg">Large · 52px</button>
+    </div>
+
+    <table style="margin-top:26px">
+      <tr><th>Token</th><th>Value</th><th>Used on</th></tr>
+      <tr><td><code>--shadow-hard-sm</code></td><td><code>2px 2px 0 navy</code></td><td>Language switch, small chips</td></tr>
+      <tr><td><code>--shadow-hard</code></td><td><code>3px 3px 0 navy</code></td><td>Buttons, cards, inputs — the default</td></tr>
+      <tr><td><code>--shadow-hard-lg</code></td><td><code>5px 5px 0 navy</code></td><td>Emphasis: the school pricing tier, final CTA</td></tr>
+    </table>
+
+    <p class="note">The offsets are tokens, not inline values, so every button, card and
+    pricing tier lands on the same distance. One drifting shadow is what makes a
+    system look improvised.</p>
+  </section>
+
+  <section>
+    <div class="eyebrow"><span class="pad"><i></i></span> Surfaces</div>
+    <h2>Cards and fields</h2>
+    <div class="cards">
+      <div class="card"><span class="k">card</span>
+        <h3 style="margin:6px 0 8px">Haqiqiy fizika</h3>
+        <p style="margin:0;font-size:14.5px;color:rgba(28,53,71,.7)">Robot Rapier fizika dvigatelida haydaydi.</p></div>
+      <div class="card card--alt"><span class="k">bg-alt</span>
+        <h3 style="margin:6px 0 8px">Eslatma</h3>
+        <p style="margin:0;font-size:14.5px;color:rgba(28,53,71,.7)">Notes, sidebars, quiet panels.</p></div>
+      <div class="card card--navy"><span class="k">navy</span>
+        <h3 style="margin:6px 0 8px">O‘qituvchi</h3>
+        <p style="margin:0;font-size:14.5px;color:rgba(248,241,222,.75)">Emphasis. The dark half of a pair.</p></div>
+    </div>
+
+    <div style="display:flex;gap:26px;flex-wrap:wrap;margin-top:26px">
+      <label class="field"><span class="k">Ism va familiya</span>
+        <input class="input" placeholder="Type here"></label>
+      <div>
+        <span class="k" style="display:block;margin-bottom:8px">Badges</span>
+        <div class="row" style="gap:8px">
+          <span class="badge badge--teal">Savol</span>
+          <span class="badge badge--orange">G‘oya</span>
+          <span class="badge badge--pink">Muvaffaqiyat</span>
+          <span class="badge badge--navy">Boshlang‘ich</span>
+          <span class="badge badge--ghost">O‘qituvchi</span>
+        </div>
+      </div>
+    </div>
+
+    <p class="note">Inputs invert the shadow — <code>inset</code> rather than outset. A field is
+    a hole in the board, not a key sitting on top of it, and the inversion is what
+    stops a form looking clickable.</p>
+  </section>
+
+  <section>
+    <div class="eyebrow"><span class="pad"><i></i></span> Texture &amp; motion</div>
+    <h2>Perfboard and the ambient gradient</h2>
+    <p class="lede">The dot grid is the site's ground plane — it runs under every section, which
+    is what makes a long page feel like one continuous board instead of a stack of
+    unrelated bands. The gradient appears only on the hero and the registration page.</p>
+
+    <div style="display:grid;gap:18px;grid-template-columns:repeat(auto-fit,minmax(280px,1fr))">
+      <div><span class="k" style="display:block;margin-bottom:8px">Perfboard · 16px dense</span>
+        <div class="perf"></div></div>
+      <div><span class="k" style="display:block;margin-bottom:8px">Animated gradient · 19s / 23s / 27s</span>
+        <div class="grad"><i class="a"></i><i class="b"></i><i class="c"></i></div></div>
+    </div>
+
+    <p class="note">Cycle lengths are mutually prime, so the loop never visibly repeats. Motion
+    is transform-only — animating <code>filter</code> or <code>background-position</code>
+    forces a repaint every frame and drops the hero to single-digit FPS on the school
+    laptops this has to run on. Both honour <code>prefers-reduced-motion</code>.</p>
+  </section>
+
+  <footer>
+    <strong>Source of truth:</strong> <code>app/globals.css</code> (tokens),
+    <code>components/ui/button.tsx</code>, <code>components/ui/card.tsx</code>,
+    <code>components/ui/field.tsx</code>. If this file and the app disagree, the app is right.
+  </footer>
+
+</div>
+</body>
+</html>

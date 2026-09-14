@@ -1,0 +1,1972 @@
+<!doctype html>
+<html lang="uz">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Arduinium — Robotika ustaxonasi</title>
+<meta name="description" content="Arduinium — maktab o'quvchilari uchun virtual sxema va kod sandbox'i. Brauzerda robotikani o'rganing.">
+
+<!-- Favicon: inline data-URI SVG — navy chip + orange LED + cream "A". No file. -->
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect x='8' y='8' width='48' height='48' rx='12' fill='%231C3547'/%3E%3Cg stroke='%231E8F82' stroke-width='5' stroke-linecap='round'%3E%3Cpath d='M20 4v6M32 4v6M44 4v6M20 54v6M32 54v6M44 54v6M4 20h6M4 32h6M4 44h6M54 20h6M54 32h6M54 44h6'/%3E%3C/g%3E%3Cpath d='M22 46 32 22l10 24' fill='none' stroke='%23FFFCF4' stroke-width='5' stroke-linejoin='round' stroke-linecap='round'/%3E%3Cpath d='M26 38h12' stroke='%23FFFCF4' stroke-width='5' stroke-linecap='round'/%3E%3Ccircle cx='32' cy='20' r='5' fill='%23D9612F'/%3E%3C/svg%3E">
+
+<!--
+  Manrope via the Fontsource CDN (deliberately not Google Fonts), per spec §1.
+
+  The spec gave the base path as `cdn.jsdelivr.net/fontsource/css/manrope@latest/`.
+  That route does not exist on jsdelivr — all five files 404, and Chrome then
+  blocks the HTML error page with ERR_BLOCKED_BY_ORB, so the page silently fell
+  back to Segoe UI. The FILENAMES in the spec are correct; only the base was
+  wrong. Verified working paths, pinned to an exact version so a future
+  Fontsource release cannot break the prototype:
+      https://cdn.jsdelivr.net/npm/@fontsource/manrope@5.3.0/latin-<weight>.css
+-->
+<link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/manrope@5.3.0/latin-400.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/manrope@5.3.0/latin-500.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/manrope@5.3.0/latin-600.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/manrope@5.3.0/latin-700.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/manrope@5.3.0/latin-800.css">
+
+<style>
+/* ==========================================================================
+   ARDUINIUM — single-file prototype
+   ==========================================================================
+   Landing + register + app stub. No build step, no framework, no bundler.
+
+   Design tokens below are the ONLY colours in the file. Anything that looks
+   like another shade is a color-mix() of one of them.
+
+   Content is never hidden by CSS waiting on JS: every scroll animation is a
+   GSAP fromTo with immediateRender:false, so if the CDN fails or JS throws,
+   the page renders complete and static. That is the single most important
+   rule here — an animation that fails should cost polish, never content.
+   ========================================================================== */
+
+:root{
+  --navy:#1C3547; --navy-2:#28495F; --bg:#F8F1DE; --bg-alt:#F1E7CC; --card:#FFFCF4;
+  --orange:#D9612F; --teal:#1E8F82; --slate:#7E93A7; --gray:#8D8D89; --pink:#D6247A;
+  --r:14px;
+  --hard:4px 4px 0 var(--navy);
+  --hard-sm:3px 3px 0 var(--navy);
+  --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace;
+  --sans:"Manrope","Segoe UI",system-ui,-apple-system,sans-serif;
+}
+
+*,*::before,*::after{box-sizing:border-box}
+/* Horizontal overflow is contained by `.ticker-wrap` (the only intentionally
+   over-wide element) plus `body { overflow-x: hidden }` below.
+   Do NOT add `overflow-x` to <html>: any non-visible overflow on the root
+   propagates to the viewport and kills `position: sticky` on the nav — tried,
+   measured, reverted. */
+html{scroll-behavior:smooth;-webkit-text-size-adjust:100%}
+body{
+  margin:0;background:var(--bg);color:var(--navy);font-family:var(--sans);
+  font-size:16px;line-height:1.62;font-weight:500;-webkit-font-smoothing:antialiased;
+  overflow-x:hidden;
+}
+h1,h2,h3,h4{margin:0;font-weight:800;line-height:1.08;letter-spacing:-.02em}
+p{margin:0}
+img{max-width:100%;display:block}
+a{color:inherit;text-decoration:none}
+button{font:inherit;color:inherit}
+:focus-visible{outline:3px solid var(--orange);outline-offset:3px;border-radius:6px}
+::selection{background:var(--orange);color:var(--card)}
+
+.skip{position:absolute;left:-9999px;top:0;z-index:400;background:var(--card);color:var(--navy);
+  padding:12px 18px;border:2px solid var(--navy);border-radius:10px;font-weight:800}
+.skip:focus{left:14px;top:14px}
+
+/**
+ * Horizontal containment lives HERE, not on <html> or <body>.
+ *
+ *  - `body { overflow-x: hidden }` propagates to the viewport, which leaves
+ *    body itself non-clipping — so it does not actually contain anything.
+ *  - `overflow-x` on <html> does contain it, but any non-visible overflow on
+ *    the root kills `position: sticky` for the nav.
+ *
+ * These three are the scroll-content wrappers and contain no sticky elements,
+ * so clipping them is free. It matters because the mascot carries
+ * `filter: drop-shadow(7px 9px 0 …)`, and filter ink overflow counts toward
+ * document scroll width: at narrow viewports the page could be dragged ~9px
+ * sideways even though nothing was visibly out of place.
+ *
+ * `clip` rather than `hidden`: it never creates a scroll container.
+ */
+#main,#page-register,#page-app{overflow-x:clip}
+
+.wrap{width:100%;max-width:1180px;margin:0 auto;padding:0 24px}
+/* overflow-x: clip contains the gear entrance — cards swing in from ±110px
+   and a transform still contributes to the scrollable overflow area. `clip`
+   rather than `hidden` so this never becomes a scroll container. */
+.sec{padding:104px 0;position:relative;overflow-x:clip}
+.sec-alt{background:color-mix(in srgb, var(--bg-alt) 62%, transparent);
+  border-top:2px solid var(--navy);border-bottom:2px solid var(--navy)}
+
+/* ======================================================== global background */
+/* Three fixed layers. They sit behind everything and never scroll, which is
+   what keeps a long page feeling like one continuous surface. */
+.bg-layer,.bg-glow,.bg-grid{position:fixed;inset:0;pointer-events:none}
+.bg-layer{z-index:-5;
+  background:linear-gradient(118deg,
+    var(--bg) 0%,
+    var(--bg-alt) 28%,
+    color-mix(in srgb, var(--teal) 9%, var(--bg)) 52%,
+    color-mix(in srgb, var(--orange) 10%, var(--bg)) 78%,
+    var(--bg) 100%);
+  background-size:300% 300%;
+  animation:grad 18s ease-in-out infinite alternate}
+@keyframes grad{from{background-position:0% 50%}to{background-position:100% 50%}}
+
+.bg-glow{z-index:-4;
+  background:
+    radial-gradient(38vw 38vw at 12% 18%, color-mix(in srgb, var(--teal) 16%, transparent), transparent 70%),
+    radial-gradient(34vw 34vw at 86% 30%, color-mix(in srgb, var(--orange) 14%, transparent), transparent 70%),
+    radial-gradient(30vw 30vw at 50% 88%, color-mix(in srgb, var(--pink) 8%, transparent), transparent 70%);
+  animation:drift 22s ease-in-out infinite alternate}
+@keyframes drift{from{transform:translate3d(0,0,0) scale(1)}to{transform:translate3d(-4vw,3vw,0) scale(1.12)}}
+
+.bg-grid{z-index:-3;
+  background-image:
+    linear-gradient(color-mix(in srgb, var(--navy) 8%, transparent) 1px, transparent 1px),
+    linear-gradient(90deg, color-mix(in srgb, var(--navy) 8%, transparent) 1px, transparent 1px);
+  background-size:46px 46px;
+  -webkit-mask-image:radial-gradient(circle at 50% 42%, #000 42%, transparent 88%);
+  mask-image:radial-gradient(circle at 50% 42%, #000 42%, transparent 88%)}
+.doodle{position:absolute;opacity:.14;color:var(--navy);animation:float 10s ease-in-out infinite}
+.d1{top:14%;left:6%}
+.d2{top:26%;right:8%;animation-delay:-2.5s}
+.d3{bottom:22%;left:11%;animation-delay:-5s}
+.d4{bottom:14%;right:12%;animation-delay:-7.5s}
+@keyframes float{0%,100%{transform:translateY(0) rotate(0)}50%{transform:translateY(-16px) rotate(4deg)}}
+
+/**
+ * The click ripple.
+ *
+ * BEHIND the content, never over it. The first version sat at z-index 120 —
+ * above everything — so a wave washed across headlines, cards and buttons and
+ * made the page look like it was glitching rather than responding. It is a
+ * background effect and it now lives with the other background layers.
+ *
+ * Two canvases, because the hero is an opaque dark band: a page-level one
+ * that shows through the transparent sections, and a hero-local one drawn in
+ * brighter values so the interaction still reads on navy. Both sit behind
+ * their own content.
+ */
+#fx{position:fixed;inset:0;z-index:-2;pointer-events:none}
+#fxHero{position:absolute;inset:0;z-index:0;pointer-events:none}
+
+/* ================================================================== buttons */
+/**
+ * Transform is composed from two independent variables:
+ *   --mg*    magnetic pull, written inline by JS as the cursor approaches
+ *   --press* hover lift / active press, owned by the stylesheet
+ * Composing them means JS never writes `transform` directly — an inline
+ * transform would outrank `:active` and silently kill the press travel, which
+ * is the single most recognisable thing about these buttons.
+ */
+.btn{
+  display:inline-flex;align-items:center;justify-content:center;gap:9px;
+  padding:14px 24px;border:2px solid var(--navy);border-radius:10px;
+  font-weight:800;font-size:14px;text-transform:uppercase;letter-spacing:.03em;
+  cursor:pointer;background:var(--card);color:var(--navy);
+  box-shadow:var(--hard);
+  transform:translate(calc(var(--mgx,0px) + var(--pressx,0px)),
+                      calc(var(--mgy,0px) + var(--pressy,0px)));
+  transition:transform .16s cubic-bezier(.22,.68,.24,1), box-shadow .12s ease, background-color .12s ease}
+.btn:hover{--pressx:-1px;--pressy:-1px;box-shadow:5px 5px 0 var(--navy)}
+.btn:active{--pressx:3px;--pressy:3px;box-shadow:0 0 0 var(--navy);transition-duration:.04s}
+.btn-primary{background:var(--orange);color:var(--card)}
+.btn-secondary{background:var(--card);color:var(--navy)}
+.btn-cream{background:var(--card);color:var(--navy)}
+.btn-on-dark{background:var(--orange);color:var(--card);border-color:var(--card);box-shadow:4px 4px 0 var(--card)}
+.btn-on-dark:hover{box-shadow:5px 5px 0 var(--card)}
+.btn-on-dark:active{box-shadow:0 0 0 var(--card)}
+.btn-sm{padding:10px 16px;font-size:12.5px}
+
+/* ================================================================== surfaces */
+.card-hard{position:relative;background:var(--card);border:2px solid var(--navy);
+  border-radius:var(--r);box-shadow:var(--hard);padding:28px}
+
+/* Cursor-follow sheen. --mx/--my are written by JS on pointermove; with no JS
+   the card simply never lights, which costs nothing. */
+.card-hard::after{content:"";position:absolute;inset:0;border-radius:inherit;
+  pointer-events:none;opacity:0;transition:opacity .3s ease;
+  background:radial-gradient(240px circle at var(--mx,50%) var(--my,50%),
+    color-mix(in srgb, var(--teal) 20%, transparent), transparent 68%)}
+.card-hard:hover::after{opacity:1}
+.card--navy.card-hard::after,.join::after,.tier-dark::after{
+  background:radial-gradient(240px circle at var(--mx,50%) var(--my,50%),
+    color-mix(in srgb, var(--orange) 26%, transparent), transparent 68%)}
+
+/* The hover transform is JS-owned (see tilt()) so it can carry the 3D angle.
+   Without JS the shadow alone still answers the hover. */
+.lift{transition:transform .22s cubic-bezier(.22,.68,.24,1), box-shadow .18s ease;
+  transform-style:preserve-3d;will-change:transform}
+.lift:hover{box-shadow:7px 7px 0 var(--navy)}
+.lift:hover .tile{transform:rotate(-5deg) scale(1.06)}
+.lift:nth-child(even):hover .tile{transform:rotate(5deg) scale(1.06)}
+
+/* scroll progress */
+.progress{position:fixed;top:0;left:0;right:0;height:3px;z-index:200;
+  background:var(--orange);transform:scaleX(0);transform-origin:0 50%;
+  pointer-events:none;will-change:transform}
+
+/* word-split headings */
+[data-rv="h2"]{perspective:700px}
+.w{display:inline-block;will-change:transform,opacity}
+
+.tile{width:50px;height:50px;border-radius:12px;border:2px solid var(--navy);
+  box-shadow:var(--hard-sm);display:grid;place-items:center;flex:none;
+  transition:transform .18s ease}
+.t-teal{background:var(--teal);color:var(--card)}
+.t-orange{background:var(--orange);color:var(--card)}
+.t-pink{background:var(--pink);color:var(--card)}
+
+.kicker{display:inline-flex;align-items:center;gap:10px;color:var(--orange);
+  font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:.14em}
+.kicker::before{content:"";width:22px;height:3px;background:var(--orange);border-radius:2px}
+.sec-h2{font-size:clamp(28px,4.2vw,44px);margin-top:16px}
+.sec-sub{margin-top:14px;max-width:60ch;color:color-mix(in srgb, var(--navy) 74%, transparent);font-size:17px}
+.dark .sec-sub{color:color-mix(in srgb, var(--card) 72%, transparent)}
+.dark{color:var(--card)}
+.dark .kicker,.dark .kicker::before{color:var(--orange);background:none}
+.dark .kicker::before{background:var(--orange)}
+
+/* dark animated band — hero and "how it works" */
+.band-dark{position:relative;color:var(--card);
+  background:linear-gradient(118deg, var(--navy) 0%, var(--navy-2) 34%,
+    color-mix(in srgb, var(--teal) 22%, var(--navy)) 58%,
+    color-mix(in srgb, var(--orange) 14%, var(--navy-2)) 80%, var(--navy) 100%);
+  background-size:300% 300%;animation:grad 18s ease-in-out infinite alternate;
+  border-top:2px solid var(--navy);border-bottom:2px solid var(--navy)}
+/* min-height:100dvh — the register and app pages are short, and without it the
+   dark gradient stopped at the content and the cream page background showed
+   through underneath as a band. */
+.page-dark{color:var(--card);min-height:100dvh;
+  background:linear-gradient(126deg, var(--navy) 0%, var(--navy-2) 38%,
+    color-mix(in srgb, var(--teal) 20%, var(--navy)) 62%,
+    color-mix(in srgb, var(--orange) 12%, var(--navy-2)) 84%, var(--navy) 100%);
+  background-size:300% 300%;animation:grad 16s ease-in-out infinite alternate}
+/* These pages are dark but do not carry the `.dark` class, so the muted body
+   colour has to be re-stated or the sub-headings sit near-invisible. */
+.page-dark .sec-sub{color:color-mix(in srgb, var(--card) 74%, transparent)}
+
+/* ====================================================================== nav */
+.nav{position:sticky;top:0;z-index:140;border-bottom:2px solid var(--navy);
+  background:color-mix(in srgb, var(--bg) 82%, transparent);backdrop-filter:blur(12px);
+  transition:box-shadow .18s ease}
+.nav.scrolled{box-shadow:0 4px 0 color-mix(in srgb, var(--navy) 16%, transparent)}
+.nav-in{display:flex;align-items:center;justify-content:space-between;gap:18px;height:70px}
+.brand{display:flex;align-items:center;gap:11px;font-weight:800;letter-spacing:.14em;font-size:17px}
+.nav-links{display:flex;gap:4px}
+.nav-links a{padding:9px 13px;border-radius:8px;font-size:14.5px;font-weight:700;
+  color:color-mix(in srgb, var(--navy) 78%, transparent);transition:color .15s, background-color .15s}
+.nav-links a:hover{color:var(--navy);background:color-mix(in srgb, var(--navy) 7%, transparent)}
+.nav-right{display:flex;align-items:center;gap:12px}
+
+.seg{position:relative;display:inline-flex;border:2px solid var(--navy);border-radius:10px;
+  background:var(--bg-alt);padding:3px;box-shadow:var(--hard-sm)}
+.seg button{position:relative;z-index:1;width:42px;padding:5px 0;border:0;background:none;cursor:pointer;
+  font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:.08em;
+  color:color-mix(in srgb, var(--navy) 62%, transparent);transition:color .16s;border-radius:7px}
+.seg button[aria-pressed="true"]{color:var(--card)}
+.seg-knob{position:absolute;top:3px;bottom:3px;left:3px;width:calc(50% - 3px);
+  background:var(--navy);border-radius:7px;transition:transform .18s cubic-bezier(.22,.68,.24,1)}
+
+.burger{display:none;width:46px;height:46px;border:2px solid var(--navy);border-radius:10px;
+  background:var(--card);box-shadow:var(--hard-sm);cursor:pointer;padding:0;
+  flex-direction:column;align-items:center;justify-content:center;gap:5px}
+.burger span{display:block;width:20px;height:2.5px;background:var(--navy);border-radius:2px;
+  transition:transform .2s ease, opacity .2s ease}
+.burger.open span:nth-child(1){transform:translateY(7.5px) rotate(45deg)}
+.burger.open span:nth-child(2){opacity:0}
+.burger.open span:nth-child(3){transform:translateY(-7.5px) rotate(-45deg)}
+.m-menu{display:none;border-top:2px solid var(--navy);background:var(--card)}
+.m-menu.open{display:block}
+.m-menu a{display:block;padding:15px 0;font-weight:700;
+  border-bottom:1px solid color-mix(in srgb, var(--navy) 12%, transparent)}
+.m-menu a:last-child{border-bottom:0}
+
+/* ===================================================================== hero */
+.hero{padding:96px 0 104px;overflow:hidden}
+/* z-index 1 so hero content always sits above its own ripple canvas (z 0). */
+.hero-in{position:relative;z-index:1;
+  display:grid;grid-template-columns:1.06fr .94fr;gap:56px;align-items:center}
+.badge{display:inline-flex;align-items:center;gap:9px;border:2px solid var(--teal);
+  border-radius:999px;padding:7px 15px;font-size:12.5px;font-weight:800;
+  text-transform:uppercase;letter-spacing:.1em;color:var(--card)}
+.badge i{width:9px;height:9px;border-radius:50%;background:var(--orange);animation:blip 2.2s ease-in-out infinite}
+@keyframes blip{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.45;transform:scale(.78)}}
+.hero h1{font-size:clamp(34px,5.4vw,62px);margin-top:24px}
+.hero h1 span{display:block}
+.hl{color:var(--orange);position:relative;display:inline-block !important}
+.hl::after{content:"";position:absolute;left:0;right:0;bottom:2px;height:5px;
+  background:var(--teal);border-radius:3px}
+.hero-sub{margin-top:22px;max-width:52ch;font-size:17.5px;
+  color:color-mix(in srgb, var(--card) 78%, transparent)}
+.hero-cta{display:flex;flex-wrap:wrap;gap:14px;margin-top:34px}
+.chips{display:flex;flex-wrap:wrap;gap:10px;margin-top:32px}
+.chip{font-family:var(--mono);font-size:12.5px;font-weight:700;padding:8px 12px;
+  border:2px solid color-mix(in srgb, var(--card) 34%, transparent);border-radius:9px;
+  color:color-mix(in srgb, var(--card) 88%, transparent);
+  background:color-mix(in srgb, var(--navy) 45%, transparent);
+  transition:transform .15s ease, border-color .15s ease}
+.chip:hover{transform:translateY(-3px);border-color:var(--teal)}
+.hero-hint{margin-top:22px;font-size:13.5px;color:color-mix(in srgb, var(--card) 60%, transparent)}
+
+.hero-art{position:relative;display:flex;justify-content:center}
+.mascot{filter:drop-shadow(7px 9px 0 color-mix(in srgb, var(--navy) 78%, transparent))}
+/* Sits at the lower-LEFT of the art column and overlaps the mascot's wheels
+   only. At `left:-14px; bottom:-26px` it landed across the chest and hid the
+   torso, the chip and both arms — the card is a depth cue, not a mask. */
+.code-card{position:absolute;left:-58px;bottom:-58px;width:248px;transform:rotate(-3deg);
+  background:var(--navy);border:2px solid var(--card);border-radius:12px;padding:13px 15px;
+  box-shadow:5px 5px 0 var(--teal);font-family:var(--mono);font-size:11px;line-height:1.62}
+.code-card .fn{color:var(--card);opacity:.55;font-size:10.5px;letter-spacing:.1em;
+  text-transform:uppercase;margin-bottom:7px;display:block}
+.code-card pre{margin:0;white-space:pre;color:var(--card);overflow:hidden}
+.kw{color:var(--teal)} .num{color:var(--orange)} .cm{color:var(--slate)}
+
+/* =================================================================== ticker */
+/* The band is deliberately wider than the viewport and rotated, so its corners
+   never leave a gap. That overhang has to be clipped by a wrapper — left
+   unclipped it pushed documentElement.scrollWidth 12px past the viewport and
+   gave the whole page a horizontal scrollbar at every breakpoint. */
+/* `overflow: clip`, not `hidden`. `body { overflow-x: hidden }` propagates to
+   the viewport, which leaves body itself NOT clipping, so the band's scaled
+   overhang still counted as document scroll width and the page could be
+   dragged ~9px sideways. `clip` is an unconditional clip that creates no
+   scroll container, so the overhang stops existing for layout purposes. */
+.ticker-wrap{overflow:clip;position:relative;z-index:2}
+/* The band is 100% wide in LAYOUT and made over-wide by a transform.
+   `width:104%; margin-left:-2%` gave the same look but added real layout
+   width, so the document itself could be dragged ~9px sideways at narrow
+   viewports — a clipping wrapper hides that visually but does not remove it.
+   scale() is transform-only, contributes nothing to layout, and the wrapper
+   clips the overhang. */
+.ticker{background:var(--teal);color:var(--card);border-top:2px solid var(--navy);
+  border-bottom:2px solid var(--navy);width:100%;
+  transform:rotate(-1deg) scale(1.045);
+  padding:14px 0;overflow:hidden;position:relative}
+/* --tick is retimed by JS from scroll velocity: scroll hard and the marquee
+   surges, then eases back. Costs one custom property and makes the band feel
+   attached to the page rather than looping beside it. */
+.ticker-track{display:flex;width:max-content;
+  animation:marq var(--tick,26s) linear infinite;
+  transition:none}
+.ticker:hover .ticker-track{animation-play-state:paused}
+.ticker-track span{font-weight:800;font-size:15px;text-transform:uppercase;letter-spacing:.1em;
+  padding:0 18px;white-space:nowrap}
+.ticker-track b{color:var(--orange)}
+@keyframes marq{from{transform:translateX(0)}to{transform:translateX(-50%)}}
+
+/* ==================================================================== grids */
+.grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:24px;margin-top:52px}
+.grid2{display:grid;grid-template-columns:repeat(2,1fr);gap:24px;margin-top:52px}
+.card-hard h3{font-size:19px;margin-top:18px}
+.card-hard p{margin-top:10px;font-size:15px;
+  color:color-mix(in srgb, var(--navy) 72%, transparent)}
+
+/* ==================================================================== steps */
+.steps{display:grid;grid-template-columns:repeat(4,1fr);gap:24px;margin-top:56px;position:relative}
+.step{position:relative;text-align:left}
+.step-n{width:54px;height:54px;border-radius:14px;background:var(--orange);color:var(--card);
+  border:2px solid var(--card);box-shadow:4px 4px 0 var(--navy-2);
+  display:grid;place-items:center;font-weight:800;font-size:19px;
+  transition:transform .2s ease}
+.step:hover .step-n{transform:scale(1.09) rotate(-6deg)}
+.step h3{font-size:18px;margin-top:18px;color:var(--card)}
+.step p{margin-top:9px;font-size:14.5px;color:color-mix(in srgb, var(--card) 72%, transparent)}
+.steps-line{position:absolute;top:27px;left:12%;right:12%;height:0;
+  border-top:3px dashed color-mix(in srgb, var(--card) 34%, transparent);
+  transform:scaleX(0);transform-origin:left center;z-index:-1}
+
+/* ================================================================= outcomes */
+.oc-list{list-style:none;margin:22px 0 0;padding:0;display:flex;flex-direction:column;gap:14px}
+.oc-list li{display:flex;gap:12px;align-items:flex-start;font-size:15.5px;font-weight:600}
+.ck{width:22px;height:22px;border-radius:50%;flex:none;display:grid;place-items:center;
+  color:var(--card);font-size:12px;font-weight:800;margin-top:2px}
+.ck-teal{background:var(--teal)} .ck-orange{background:var(--orange)}
+
+/* ==================================================================== quote */
+.quote-card{position:relative;max-width:900px;margin:52px auto 0;padding:44px 40px}
+.quote-mark{position:absolute;top:-24px;left:32px;width:52px;height:52px;border-radius:14px;
+  background:var(--orange);color:var(--card);border:2px solid var(--navy);box-shadow:var(--hard-sm);
+  display:grid;place-items:center;font-size:34px;font-weight:800;line-height:1;padding-bottom:12px}
+.quote-card blockquote{margin:0;font-size:clamp(17px,2.1vw,21px);line-height:1.6;font-weight:600}
+.quote-card cite{display:block;margin-top:22px;font-style:normal;font-weight:800;font-size:14.5px;
+  color:var(--orange)}
+.quote-trans{margin-top:20px;padding-top:20px;font-size:15px;font-weight:500;
+  border-top:2px solid color-mix(in srgb, var(--navy) 14%, transparent);
+  color:color-mix(in srgb, var(--navy) 72%, transparent)}
+html[lang="en"] .only-uz{display:none}
+
+/* =================================================================== videos */
+.vid-head{display:flex;align-items:flex-end;justify-content:space-between;gap:24px;flex-wrap:wrap}
+.vid{padding:0;overflow:hidden}
+.vid-thumb{position:relative;aspect-ratio:16/10;border-bottom:2px solid var(--navy);
+  background:var(--bg-alt);overflow:hidden}
+.vid-thumb img{width:100%;height:100%;object-fit:cover}
+.vid-tag{position:absolute;top:12px;left:12px;padding:4px 10px;border:2px solid var(--navy);
+  border-radius:8px;font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.08em;
+  color:var(--card)}
+.vid-dur{position:absolute;right:12px;bottom:12px;padding:3px 9px;border:2px solid var(--navy);
+  border-radius:8px;background:var(--card);font-family:var(--mono);font-size:11.5px;font-weight:700}
+.vid-play{position:absolute;inset:0;margin:auto;width:62px;height:62px;border-radius:50%;
+  background:var(--orange);border:2px solid var(--navy);box-shadow:var(--hard-sm);
+  display:grid;place-items:center;color:var(--card);animation:pulse 2.4s ease-in-out infinite}
+@keyframes pulse{0%,100%{transform:scale(1)}50%{transform:scale(1.08)}}
+.vid-body{padding:22px}
+.vid-body h3{font-size:17.5px}
+.vid-level{margin-top:8px;font-size:13.5px;font-weight:700;color:var(--teal)}
+
+/* ================================================================ community */
+.post-top{display:flex;align-items:center;gap:12px}
+.avatar{width:42px;height:42px;border-radius:50%;border:2px solid var(--navy);
+  display:grid;place-items:center;font-weight:800;font-size:14px;color:var(--card);flex:none}
+.a-teal{background:var(--teal)} .a-orange{background:var(--orange)}
+.role-badge{font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.08em;
+  padding:3px 9px;border-radius:7px;border:2px solid var(--navy);color:var(--card)}
+.r-teal{background:var(--teal)} .r-orange{background:var(--orange)}
+.tag{display:inline-block;margin-top:16px;font-size:11.5px;font-weight:800;text-transform:uppercase;
+  letter-spacing:.08em;padding:4px 10px;border-radius:7px;border:2px solid var(--navy)}
+.tag-idea{background:color-mix(in srgb, var(--teal) 24%, var(--card));color:var(--navy)}
+.tag-win{background:color-mix(in srgb, var(--pink) 22%, var(--card));color:var(--navy)}
+.join{background:var(--navy);color:var(--card);box-shadow:4px 4px 0 var(--orange);
+  display:flex;flex-direction:column;justify-content:center;gap:14px}
+.join h3{font-size:20px;color:var(--card)}
+.join p{color:color-mix(in srgb, var(--card) 74%, transparent);font-size:15px}
+
+/* ================================================================== pricing */
+.price-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:28px;margin-top:52px;
+  max-width:900px;margin-left:auto;margin-right:auto}
+.tier{display:flex;flex-direction:column;gap:20px;padding:36px}
+.tier-dark{background:var(--navy);color:var(--card);box-shadow:6px 6px 0 var(--orange)}
+.tier h3{font-size:22px}
+.tier .desc{font-size:14.5px;color:color-mix(in srgb, var(--navy) 66%, transparent)}
+.tier-dark .desc{color:color-mix(in srgb, var(--card) 66%, transparent)}
+.tier .amount{font-size:clamp(32px,4.4vw,44px);font-weight:800;line-height:1}
+.tier .note{font-size:13.5px;color:color-mix(in srgb, var(--navy) 60%, transparent)}
+.tier-dark .note{color:color-mix(in srgb, var(--card) 60%, transparent)}
+.feat{list-style:none;margin:0;padding:22px 0 0;flex:1;display:flex;flex-direction:column;gap:13px;
+  border-top:2px solid color-mix(in srgb, var(--navy) 14%, transparent)}
+.tier-dark .feat{border-top-color:color-mix(in srgb, var(--card) 18%, transparent)}
+.feat li{display:flex;gap:11px;align-items:flex-start;font-size:15px;font-weight:600}
+
+/* ====================================================================== CTA */
+.cta-band{background:var(--orange);border-top:2px solid var(--navy);border-bottom:2px solid var(--navy);
+  padding:76px 0}
+.cta-in{display:grid;grid-template-columns:1.2fr .8fr;gap:44px;align-items:center}
+.cta-in h2{font-size:clamp(26px,3.6vw,40px);color:var(--navy)}
+.cta-in p{margin-top:14px;font-size:17px;color:color-mix(in srgb, var(--navy) 80%, transparent)}
+.cta-img{border:2px solid var(--navy);border-radius:var(--r);box-shadow:6px 6px 0 var(--navy);
+  transform:rotate(2deg);overflow:hidden;transition:transform .2s ease}
+.cta-img:hover{transform:rotate(-2deg) scale(1.02)}
+
+/* =================================================================== footer */
+.foot{background:var(--navy);color:var(--card);padding:64px 0 34px;border-top:2px solid var(--navy)}
+.foot-grid{display:grid;grid-template-columns:1.6fr 1fr 1fr;gap:40px}
+.foot p{color:color-mix(in srgb, var(--card) 68%, transparent);font-size:14.5px;margin-top:14px;max-width:38ch}
+.foot h4{font-size:12px;text-transform:uppercase;letter-spacing:.14em;color:var(--orange)}
+.foot ul{list-style:none;margin:16px 0 0;padding:0;display:flex;flex-direction:column;gap:10px}
+.foot ul a{font-size:14.5px;color:color-mix(in srgb, var(--card) 78%, transparent)}
+.foot ul a:hover{color:var(--orange)}
+.foot-bot{margin-top:46px;padding-top:24px;display:flex;flex-wrap:wrap;gap:10px;
+  justify-content:space-between;font-size:13px;
+  border-top:2px solid color-mix(in srgb, var(--card) 18%, transparent);
+  color:color-mix(in srgb, var(--card) 58%, transparent)}
+
+/* ================================================================= register */
+.page{display:none}
+.page.active{display:block}
+.reg-top{display:flex;align-items:center;justify-content:space-between;gap:18px;
+  padding:22px 0;border-bottom:2px solid color-mix(in srgb, var(--card) 20%, transparent)}
+.reg-in{display:grid;grid-template-columns:.9fr 1.1fr;gap:56px;align-items:center;padding:72px 0 96px}
+.reg-art{position:relative}
+.reg-art img{border:2px solid var(--card);border-radius:var(--r);
+  box-shadow:7px 7px 0 var(--teal), 14px 14px 0 var(--navy);transform:rotate(-2deg)}
+.sticker{position:absolute;right:-10px;top:-18px;background:var(--orange);color:var(--card);
+  border:2px solid var(--navy);border-radius:10px;padding:9px 15px;font-size:12.5px;font-weight:800;
+  transform:rotate(3deg);box-shadow:var(--hard-sm)}
+.stepper{display:flex;gap:10px;margin-top:26px;flex-wrap:wrap}
+.st{display:flex;align-items:center;gap:9px;padding:8px 14px;border-radius:9px;
+  border:2px solid color-mix(in srgb, var(--card) 34%, transparent);font-size:13px;font-weight:800;
+  color:color-mix(in srgb, var(--card) 64%, transparent)}
+.st b{width:20px;height:20px;border-radius:50%;display:grid;place-items:center;font-size:11px;
+  background:color-mix(in srgb, var(--card) 22%, transparent)}
+.st.on{border-color:var(--orange);color:var(--card)}
+.st.on b{background:var(--orange)}
+.st.done{border-color:var(--teal);color:var(--card)}
+.st.done b{background:var(--teal)}
+
+.role-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:16px;margin-top:30px}
+.role{display:flex;align-items:center;gap:15px;text-align:left;cursor:pointer;
+  background:var(--card);color:var(--navy);border:2px solid var(--navy);border-radius:12px;
+  padding:18px;box-shadow:var(--hard);transition:transform .12s ease, box-shadow .12s ease, outline-color .12s}
+.role:hover{transform:translate(-1px,-1px);box-shadow:5px 5px 0 var(--navy)}
+.role:active{transform:translate(3px,3px);box-shadow:0 0 0 var(--navy)}
+.role[aria-pressed="true"]{outline:3px solid var(--orange);outline-offset:3px;
+  box-shadow:5px 5px 0 var(--teal)}
+/* Both must be block: as inline spans the title and the description ran
+   together on one line — "O'quvchimanRobotikani o'rganmoqchiman". */
+.role .rt{display:block;font-weight:800;font-size:16px;line-height:1.25}
+.role .rd{display:block;font-size:13.5px;margin-top:4px;line-height:1.45;
+  color:color-mix(in srgb, var(--navy) 66%, transparent)}
+
+.frow{display:grid;grid-template-columns:repeat(2,1fr);gap:16px;margin-top:8px}
+.f{display:flex;flex-direction:column;gap:7px}
+.f label{font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:.1em;
+  color:color-mix(in srgb, var(--card) 72%, transparent)}
+.f input,.f select{background:var(--bg-alt);color:var(--navy);border:2px solid var(--navy);
+  border-radius:10px;padding:13px 15px;font:inherit;font-size:15px;font-weight:600;
+  transition:transform .12s ease, box-shadow .12s ease}
+.f input:focus,.f select:focus{outline:none;box-shadow:var(--hard-sm);transform:translate(-1px,-1px)}
+.f.bad input,.f.bad select{animation:flash 1.2s ease}
+@keyframes flash{0%,100%{box-shadow:none}
+  20%,60%{box-shadow:0 0 0 3px color-mix(in srgb, var(--orange) 70%, transparent)}}
+.form-card{margin-top:26px;background:color-mix(in srgb, var(--navy) 46%, transparent);
+  border:2px solid color-mix(in srgb, var(--card) 26%, transparent);border-radius:var(--r);padding:28px}
+.note-teal{margin-top:16px;padding:13px 15px;border-radius:10px;font-size:14px;font-weight:600;
+  background:color-mix(in srgb, var(--teal) 26%, transparent);
+  border:2px solid var(--teal);color:var(--card)}
+.success{display:flex;flex-direction:column;align-items:flex-start;gap:16px}
+.role-line{color:var(--orange);font-weight:800;font-size:16px}
+
+/* ====================================================================== app */
+.app-head{display:flex;align-items:center;justify-content:space-between;gap:20px;flex-wrap:wrap;
+  padding:26px 0;border-bottom:2px solid color-mix(in srgb, var(--card) 20%, transparent)}
+.app-badge{display:inline-flex;align-items:center;gap:8px;background:var(--teal);color:var(--card);
+  border:2px solid var(--navy);border-radius:9px;padding:6px 13px;font-size:12px;font-weight:800;
+  text-transform:uppercase;letter-spacing:.08em}
+.app-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:22px;margin-top:38px;padding-bottom:96px}
+.app-card{background:var(--card);color:var(--navy)}
+.soon{font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.08em;
+  padding:3px 9px;border-radius:7px;border:2px solid var(--navy)}
+.s-gray{background:var(--bg-alt);color:color-mix(in srgb, var(--navy) 70%, transparent)}
+.s-teal{background:var(--teal);color:var(--card)}
+.stub{max-width:620px;margin:44px auto 96px;text-align:center;align-items:center;display:flex;
+  flex-direction:column;gap:18px}
+
+/* ================================================== entrance (no-GSAP path) */
+.enter .a1,.enter .a2,.enter .a3,.enter .a4,.enter .a5,.enter .a6{
+  animation:rise .62s cubic-bezier(.22,.68,.24,1) both}
+.enter .a2{animation-delay:.07s} .enter .a3{animation-delay:.14s}
+.enter .a4{animation-delay:.21s} .enter .a5{animation-delay:.28s} .enter .a6{animation-delay:.35s}
+@keyframes rise{from{opacity:0;transform:translateY(22px)}to{opacity:1;transform:none}}
+
+/* ============================================================== responsive */
+@media(max-width:1024px){
+  .grid3{grid-template-columns:repeat(2,1fr)}
+  .steps{grid-template-columns:repeat(2,1fr)}
+  .steps-line{display:none}
+  .hero-in{grid-template-columns:1fr;gap:64px}
+  .hero-art{order:-1}
+  .reg-in{grid-template-columns:1fr;gap:44px}
+  .app-grid{grid-template-columns:1fr}
+  .cta-in{grid-template-columns:1fr}
+}
+@media(max-width:820px){
+  .nav-links{display:none}
+  .nav-right .btn{display:none}
+  .burger{display:flex}
+  .grid2{grid-template-columns:1fr}
+  .price-grid{grid-template-columns:1fr}
+  .foot-grid{grid-template-columns:repeat(2,1fr)}
+  .code-card{left:auto;right:0}
+}
+@media(max-width:560px){
+  .sec{padding:72px 0}
+  .grid3,.grid2,.steps,.price-grid,.role-grid,.frow,.foot-grid{grid-template-columns:1fr}
+  .cta-img{display:none}
+  .code-card{position:static;width:100%;transform:none;margin-top:26px}
+  .hero{padding:64px 0 76px}
+}
+
+/* ========================================================= reduced motion  */
+@media(prefers-reduced-motion:reduce){
+  html{scroll-behavior:auto}
+  *,*::before,*::after{animation:none !important;transition:none !important}
+  .bg-layer,.bg-glow,.band-dark,.page-dark{background-size:100% 100% !important}
+  .ticker-track{animation:none !important}
+  .enter .a1,.enter .a2,.enter .a3,.enter .a4,.enter .a5,.enter .a6{opacity:1;transform:none}
+}
+</style>
+</head>
+<body>
+
+<a class="skip" href="#main" data-i18n="skip">Asosiy kontentga o'tish</a>
+<div class="progress" id="progress" aria-hidden="true"></div>
+
+<!-- three fixed background layers -->
+<div class="bg-layer" aria-hidden="true"></div>
+<div class="bg-glow" aria-hidden="true"></div>
+<div class="bg-grid" aria-hidden="true">
+  <!-- floating doodles: chip, LED, resistor, code brace -->
+  <svg class="doodle d1" width="60" height="60" viewBox="0 0 60 60" fill="none" stroke="currentColor" stroke-width="3">
+    <rect x="14" y="14" width="32" height="32" rx="6"/>
+    <path d="M22 6v8M30 6v8M38 6v8M22 46v8M30 46v8M38 46v8M6 22h8M6 30h8M6 38h8M46 22h8M46 30h8M46 38h8" stroke-linecap="round"/>
+  </svg>
+  <svg class="doodle d2" width="54" height="54" viewBox="0 0 54 54" fill="none" stroke="currentColor" stroke-width="3">
+    <path d="M18 30a9 9 0 1 1 18 0v8H18z" stroke-linejoin="round"/><path d="M22 46h10M24 52h6" stroke-linecap="round"/>
+    <path d="M27 6v6M12 14l4 4M42 14l-4 4" stroke-linecap="round"/>
+  </svg>
+  <svg class="doodle d3" width="76" height="40" viewBox="0 0 76 40" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M2 20h12l5-12 8 24 8-24 8 24 5-12h26"/>
+  </svg>
+  <svg class="doodle d4" width="58" height="58" viewBox="0 0 58 58" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M22 10c-8 0-8 15-14 19 6 4 6 19 14 19M36 10c8 0 8 15 14 19-6 4-6 19-14 19"/>
+  </svg>
+</div>
+
+<canvas id="fx" aria-hidden="true"></canvas>
+
+<!-- ======================================================= LANDING ======= -->
+<div class="page active" id="page-landing">
+
+<header class="nav" id="nav">
+  <div class="wrap nav-in">
+    <a class="brand" href="#/">
+      <svg width="34" height="34" viewBox="0 0 64 64" aria-hidden="true">
+        <rect x="8" y="8" width="48" height="48" rx="12" fill="#1C3547"/>
+        <g stroke="#1E8F82" stroke-width="5" stroke-linecap="round">
+          <path d="M20 4v6M32 4v6M44 4v6M20 54v6M32 54v6M44 54v6M4 20h6M4 32h6M4 44h6M54 20h6M54 32h6M54 44h6"/>
+        </g>
+        <path d="M22 46 32 22l10 24" fill="none" stroke="#FFFCF4" stroke-width="5" stroke-linejoin="round" stroke-linecap="round"/>
+        <path d="M26 38h12" stroke="#FFFCF4" stroke-width="5" stroke-linecap="round"/>
+        <circle cx="32" cy="20" r="5" fill="#D9612F"/>
+      </svg>
+      <span>ARDUINIUM</span>
+    </a>
+
+    <nav class="nav-links">
+      <a href="#features" data-i18n="nav.features">Imkoniyatlar</a>
+      <a href="#how" data-i18n="nav.how">Qanday ishlaydi</a>
+      <a href="#videos" data-i18n="nav.videos">Video darslar</a>
+      <a href="#community" data-i18n="nav.community">Hamjamiyat</a>
+      <a href="#pricing" data-i18n="nav.pricing">Narxlar</a>
+    </nav>
+
+    <div class="nav-right">
+      <div class="seg" role="group" aria-label="Language">
+        <span class="seg-knob" data-knob></span>
+        <button type="button" data-lang="uz" aria-pressed="true">UZ</button>
+        <button type="button" data-lang="en" aria-pressed="false">EN</button>
+      </div>
+      <a class="btn btn-primary btn-sm" href="#/register" data-i18n="nav.cta">Ro'yxatdan o'tish</a>
+      <button class="burger" id="burger" type="button" aria-label="Menu" aria-expanded="false">
+        <span></span><span></span><span></span>
+      </button>
+    </div>
+  </div>
+  <div class="m-menu" id="mmenu">
+    <div class="wrap">
+      <a href="#features" data-i18n="nav.features">Imkoniyatlar</a>
+      <a href="#how" data-i18n="nav.how">Qanday ishlaydi</a>
+      <a href="#videos" data-i18n="nav.videos">Video darslar</a>
+      <a href="#community" data-i18n="nav.community">Hamjamiyat</a>
+      <a href="#pricing" data-i18n="nav.pricing">Narxlar</a>
+      <a href="#/register" data-i18n="nav.cta">Ro'yxatdan o'tish</a>
+    </div>
+  </div>
+</header>
+
+<main id="main">
+
+<!-- hero -->
+<section class="band-dark hero dark">
+  <canvas id="fxHero" aria-hidden="true"></canvas>
+  <div class="wrap hero-in">
+    <div class="hero-copy">
+      <span class="badge" data-hero="badge"><i></i><span data-i18n="hero.badge">Robotika • Arduino • Kod</span></span>
+      <h1>
+        <span data-hero="t1" data-i18n="hero.t1">Robotikani brauzerda o'rganing —</span>
+        <span data-hero="t2"><span class="hl" data-i18n="hero.t2">qurilma shart emas</span></span>
+      </h1>
+      <p class="hero-sub" data-hero="sub" data-i18n="hero.sub"></p>
+      <div class="hero-cta" data-hero="cta">
+        <a class="btn btn-primary" href="#/register" data-i18n="hero.cta1">Bepul boshlash</a>
+        <a class="btn btn-on-dark" href="#pricing" data-i18n="hero.cta2">Narxlarni ko'rish</a>
+      </div>
+      <div class="chips" data-hero="chips">
+        <span class="chip">pinMode()</span><span class="chip">digitalWrite()</span>
+        <span class="chip">digitalRead()</span><span class="chip">delay()</span>
+      </div>
+      <p class="hero-hint" data-hero="hint" data-i18n="hero.hint"></p>
+    </div>
+
+    <div class="hero-art">
+      <!-- Ardu — inline SVG, never an image file (spec §9) -->
+      <svg class="mascot" data-hero="mascot" width="340" height="440" viewBox="0 0 340 440" role="img" aria-label="Ardu">
+        <g fill="none" stroke="#1C3547" stroke-width="9" stroke-linecap="round" stroke-linejoin="round">
+          <!-- antenna -->
+          <path d="M170 62c2-16 6-26 12-34"/>
+          <g stroke="#D9612F" stroke-width="7">
+            <path d="M182 6l6-10M200 16l10-6M198 34l12 2"/>
+          </g>
+          <circle cx="186" cy="22" r="15" fill="#D9612F" stroke="#1C3547"/>
+          <!-- ears -->
+          <ellipse cx="66" cy="136" rx="17" ry="28" fill="#D9612F"/>
+          <ellipse cx="274" cy="136" rx="17" ry="28" fill="#D9612F"/>
+          <!-- head -->
+          <rect x="70" y="62" width="200" height="146" rx="38" fill="#FFFCF4"/>
+          <rect x="94" y="86" width="152" height="98" rx="24" fill="#1C3547" stroke="none"/>
+          <!-- eyes -->
+          <circle cx="140" cy="128" r="21" fill="#1E8F82" stroke="none"/>
+          <circle cx="200" cy="128" r="21" fill="#1E8F82" stroke="none"/>
+          <circle cx="140" cy="128" r="10" fill="#1C3547" stroke="none"/>
+          <circle cx="200" cy="128" r="10" fill="#1C3547" stroke="none"/>
+          <circle cx="146" cy="120" r="5" fill="#FFFCF4" stroke="none"/>
+          <circle cx="206" cy="120" r="5" fill="#FFFCF4" stroke="none"/>
+          <!-- smile -->
+          <path d="M150 158q20 18 40 0" stroke="#FFFCF4" stroke-width="7"/>
+          <!-- neck -->
+          <path d="M152 206v14M188 206v14" stroke-width="10"/>
+          <!-- body -->
+          <rect x="86" y="220" width="168" height="150" rx="52" fill="#FFFCF4"/>
+          <!-- traces -->
+          <g stroke="#28495F" stroke-width="4">
+            <path d="M112 268h20l12-12M112 320h26l14 14M228 268h-18l-12-12M228 322h-24"/>
+          </g>
+          <circle cx="112" cy="268" r="5" fill="#1E8F82" stroke="none"/>
+          <circle cx="112" cy="320" r="5" fill="#D9612F" stroke="none"/>
+          <circle cx="228" cy="268" r="5" fill="#D9612F" stroke="none"/>
+          <circle cx="228" cy="322" r="5" fill="#1E8F82" stroke="none"/>
+          <!-- chest chip -->
+          <rect x="146" y="272" width="48" height="48" rx="9" fill="#1C3547" stroke="none"/>
+          <g stroke="#1E8F82" stroke-width="5" stroke-linecap="round">
+            <path d="M156 266v-8M170 266v-8M184 266v-8M156 334v-8M170 334v-8M184 334v-8"/>
+          </g>
+          <text x="170" y="306" font-family="Manrope,sans-serif" font-size="30" font-weight="800"
+                fill="#FFFCF4" text-anchor="middle" stroke="none">A</text>
+          <!-- arms + hands.
+               Drawn at stroke-width 17 rather than the group's 9: at 9 they
+               read as wires and the hands looked like two loose dots floating
+               beside the body. Cream fill, navy outline, drawn BEFORE the
+               hands so the joint tucks under them. -->
+          <path d="M92 254q-28 -10 -44 -34" fill="none" stroke-width="17"/>
+          <path d="M248 266q30 6 42 28"   fill="none" stroke-width="17"/>
+          <circle cx="44" cy="214" r="24" fill="#D9612F"/>
+          <circle cx="292" cy="300" r="24" fill="#D9612F"/>
+          <!-- wheels -->
+          <circle cx="122" cy="392" r="40" fill="#1C3547"/>
+          <circle cx="218" cy="392" r="40" fill="#1C3547"/>
+          <circle cx="122" cy="392" r="19" fill="#FFFCF4"/>
+          <circle cx="218" cy="392" r="19" fill="#FFFCF4"/>
+          <circle cx="122" cy="392" r="8" fill="#D9612F" stroke="none"/>
+          <circle cx="218" cy="392" r="8" fill="#D9612F" stroke="none"/>
+        </g>
+      </svg>
+
+      <div class="code-card" data-hero="code">
+        <span class="fn">Blink.ino</span>
+<pre><span class="cm">// birinchi dastur</span>
+<span class="kw">void</span> setup() {
+  pinMode(<span class="num">13</span>, OUTPUT);
+}
+<span class="kw">void</span> loop() {
+  digitalWrite(<span class="num">13</span>, HIGH);
+  delay(<span class="num">500</span>);
+  digitalWrite(<span class="num">13</span>, LOW);
+  delay(<span class="num">500</span>);
+}</pre>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ticker -->
+<div class="ticker-wrap" data-rv="ticker">
+  <div class="ticker">
+    <div class="ticker-track" id="ticker"></div>
+  </div>
+</div>
+
+<!-- problem -->
+<section class="sec sec-alt" id="problem">
+  <div class="wrap">
+    <span class="kicker" data-rv="kicker" data-i18n="prob.kicker">Muammo</span>
+    <h2 class="sec-h2" data-rv="h2" data-i18n="prob.title"></h2>
+    <p class="sec-sub" data-rv="sub" data-i18n="prob.sub"></p>
+    <div class="grid3" data-stagger>
+      <article class="card-hard lift">
+        <span class="tile t-orange"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><ellipse cx="12" cy="6" rx="8" ry="3"/><path d="M4 6v6c0 1.7 3.6 3 8 3s8-1.3 8-3V6M4 12v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6"/></svg></span>
+        <h3 data-i18n="p1.t"></h3><p data-i18n="p1.d"></p>
+      </article>
+      <article class="card-hard lift">
+        <span class="tile t-teal"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="9" cy="8" r="3.4"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0"/><path d="M17 5.2a3.4 3.4 0 0 1 0 6.6M18.5 20a6.4 6.4 0 0 0-3-5.4"/></svg></span>
+        <h3 data-i18n="p2.t"></h3><p data-i18n="p2.d"></p>
+      </article>
+      <article class="card-hard lift">
+        <span class="tile t-pink"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round"><path d="M12 3l8 3v6c0 5-3.4 8.2-8 9-4.6-.8-8-4-8-9V6z"/><path d="M9 12l2.2 2.2L15.5 10"/></svg></span>
+        <h3 data-i18n="p3.t"></h3><p data-i18n="p3.d"></p>
+      </article>
+    </div>
+  </div>
+</section>
+
+<!-- features -->
+<section class="sec" id="features">
+  <div class="wrap">
+    <span class="kicker" data-rv="kicker" data-i18n="feat.kicker">Imkoniyatlar</span>
+    <h2 class="sec-h2" data-rv="h2" data-i18n="feat.title"></h2>
+    <p class="sec-sub" data-rv="sub" data-i18n="feat.sub"></p>
+    <div class="grid3" data-stagger>
+      <article class="card-hard lift"><span class="tile t-teal"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><rect x="6" y="6" width="12" height="12" rx="2.5"/><path d="M9 2v4M12 2v4M15 2v4M9 18v4M12 18v4M15 18v4M2 9h4M2 12h4M2 15h4M18 9h4M18 12h4M18 15h4" stroke-linecap="round"/></svg></span><h3 data-i18n="f1.t"></h3><p data-i18n="f1.d"></p></article>
+      <article class="card-hard lift"><span class="tile t-orange"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round"><path d="M3 5.5A2.5 2.5 0 0 1 5.5 3H11v18H5.5A2.5 2.5 0 0 1 3 18.5z"/><path d="M21 5.5A2.5 2.5 0 0 0 18.5 3H13v18h5.5a2.5 2.5 0 0 0 2.5-2.5z"/></svg></span><h3 data-i18n="f2.t"></h3><p data-i18n="f2.d"></p></article>
+      <article class="card-hard lift"><span class="tile t-pink"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round"><circle cx="12" cy="12" r="9.5"/><path d="M10 8.5l6 3.5-6 3.5z"/></svg></span><h3 data-i18n="f3.t"></h3><p data-i18n="f3.d"></p></article>
+      <article class="card-hard lift"><span class="tile t-teal"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round"><path d="M21 12a8 8 0 0 1-11.6 7.1L3 21l1.9-6.4A8 8 0 1 1 21 12z"/></svg></span><h3 data-i18n="f4.t"></h3><p data-i18n="f4.d"></p></article>
+      <article class="card-hard lift"><span class="tile t-orange"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round"><path d="M12 4L2 9l10 5 10-5z"/><path d="M6 11.5V17c0 1.7 2.7 3 6 3s6-1.3 6-3v-5.5"/></svg></span><h3 data-i18n="f5.t"></h3><p data-i18n="f5.d"></p></article>
+      <article class="card-hard lift"><span class="tile t-pink"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round"><circle cx="12" cy="9" r="6"/><path d="M8.5 14L7 22l5-2.6L17 22l-1.5-8"/></svg></span><h3 data-i18n="f6.t"></h3><p data-i18n="f6.d"></p></article>
+    </div>
+  </div>
+</section>
+
+<!-- how -->
+<section class="sec band-dark dark" id="how">
+  <div class="wrap">
+    <span class="kicker" data-rv="kicker" data-i18n="how.kicker">Qanday ishlaydi</span>
+    <h2 class="sec-h2" data-rv="h2" data-i18n="how.title"></h2>
+    <div class="steps">
+      <span class="steps-line" id="stepsLine"></span>
+      <div class="step"><span class="step-n">1</span><h3 data-i18n="s1.t"></h3><p data-i18n="s1.d"></p></div>
+      <div class="step"><span class="step-n">2</span><h3 data-i18n="s2.t"></h3><p data-i18n="s2.d"></p></div>
+      <div class="step"><span class="step-n">3</span><h3 data-i18n="s3.t"></h3><p data-i18n="s3.d"></p></div>
+      <div class="step"><span class="step-n">4</span><h3 data-i18n="s4.t"></h3><p data-i18n="s4.d"></p></div>
+    </div>
+  </div>
+</section>
+
+<!-- outcomes -->
+<section class="sec" id="outcomes">
+  <div class="wrap">
+    <span class="kicker" data-rv="kicker" data-i18n="ach.kicker">Natijalar</span>
+    <h2 class="sec-h2" data-rv="h2" data-i18n="ach.title"></h2>
+    <div class="grid2" data-stagger>
+      <article class="card-hard lift">
+        <span class="tile t-teal"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="12" cy="7.5" r="3.8"/><path d="M4.5 20a7.5 7.5 0 0 1 15 0"/></svg></span>
+        <h3 data-i18n="ach.kids"></h3>
+        <ul class="oc-list">
+          <li><span class="ck ck-teal">✓</span><span data-i18n="k1"></span></li>
+          <li><span class="ck ck-teal">✓</span><span data-i18n="k2"></span></li>
+          <li><span class="ck ck-teal">✓</span><span data-i18n="k3"></span></li>
+          <li><span class="ck ck-teal">✓</span><span data-i18n="k4"></span></li>
+        </ul>
+      </article>
+      <article class="card-hard lift">
+        <span class="tile t-orange"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round"><path d="M12 4L2 9l10 5 10-5z"/><path d="M6 11.5V17c0 1.7 2.7 3 6 3s6-1.3 6-3v-5.5"/></svg></span>
+        <h3 data-i18n="ach.teach"></h3>
+        <ul class="oc-list">
+          <li><span class="ck ck-orange">✓</span><span data-i18n="t1"></span></li>
+          <li><span class="ck ck-orange">✓</span><span data-i18n="t2"></span></li>
+          <li><span class="ck ck-orange">✓</span><span data-i18n="t3"></span></li>
+          <li><span class="ck ck-orange">✓</span><span data-i18n="t4"></span></li>
+        </ul>
+      </article>
+    </div>
+  </div>
+</section>
+
+<!-- quote -->
+<section class="sec sec-alt" id="quote">
+  <div class="wrap">
+    <article class="card-hard quote-card" id="quoteCard">
+      <span class="quote-mark">”</span>
+      <blockquote id="quoteText"></blockquote>
+      <cite>Seymour Papert — Mindstorms: Children, Computers, and Powerful Ideas, 1980</cite>
+      <p class="quote-trans only-uz" data-i18n="quote.trans"></p>
+    </article>
+  </div>
+</section>
+
+<!-- videos -->
+<section class="sec" id="videos">
+  <div class="wrap">
+    <div class="vid-head">
+      <div>
+        <span class="kicker" data-rv="kicker" data-i18n="vid.kicker">Video darslar</span>
+        <h2 class="sec-h2" data-rv="h2" data-i18n="vid.title"></h2>
+        <p class="sec-sub" data-rv="sub" data-i18n="vid.sub"></p>
+      </div>
+      <a class="btn btn-secondary" href="#/register" data-i18n="vid.all">Barchasini ko'rish</a>
+    </div>
+    <div class="grid3" data-stagger>
+      <article class="card-hard lift vid">
+        <div class="vid-thumb">
+          <img alt="" loading="lazy" src="https://image.qwenlm.ai/public_source/4ef012be-7c88-4026-b421-187911ddefc4/1dd70150c-2544-4369-841e-cd7c3d5beb41.png">
+          <span class="vid-tag r-teal" data-i18n="v1.l">Boshlang'ich</span>
+          <span class="vid-play"><svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5l12 7-12 7z"/></svg></span>
+          <span class="vid-dur">6:24</span>
+        </div>
+        <div class="vid-body"><h3 data-i18n="v1.t"></h3><p class="vid-level" data-i18n="v1.l"></p></div>
+      </article>
+      <article class="card-hard lift vid">
+        <div class="vid-thumb">
+          <img alt="" loading="lazy" src="https://image.qwenlm.ai/public_source/4ef012be-7c88-4026-b421-187911ddefc4/1d3a4831e-6982-470a-a6e0-e848cc2ee7ba.png">
+          <span class="vid-tag r-teal" data-i18n="v2.l">Boshlang'ich</span>
+          <span class="vid-play"><svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5l12 7-12 7z"/></svg></span>
+          <span class="vid-dur">9:12</span>
+        </div>
+        <div class="vid-body"><h3 data-i18n="v2.t"></h3><p class="vid-level" data-i18n="v2.l"></p></div>
+      </article>
+      <article class="card-hard lift vid">
+        <div class="vid-thumb">
+          <img alt="" loading="lazy" src="https://image.qwenlm.ai/public_source/4ef012be-7c88-4026-b421-187911ddefc4/182916fe6-3a2c-408d-9430-05dbe725d2eb.png">
+          <span class="vid-tag r-orange" data-i18n="v3.l">O'rta</span>
+          <span class="vid-play"><svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5l12 7-12 7z"/></svg></span>
+          <span class="vid-dur">12:40</span>
+        </div>
+        <div class="vid-body"><h3 data-i18n="v3.t"></h3><p class="vid-level" data-i18n="v3.l"></p></div>
+      </article>
+    </div>
+  </div>
+</section>
+
+<!-- community -->
+<section class="sec sec-alt" id="community">
+  <div class="wrap">
+    <span class="kicker" data-rv="kicker" data-i18n="com.kicker">Hamjamiyat</span>
+    <h2 class="sec-h2" data-rv="h2" data-i18n="com.title"></h2>
+    <p class="sec-sub" data-rv="sub" data-i18n="com.sub"></p>
+    <div class="grid3" data-stagger>
+      <article class="card-hard lift">
+        <div class="post-top">
+          <span class="avatar a-teal">DS</span>
+          <span class="role-badge r-teal" data-i18n="p1.role"></span>
+        </div>
+        <h3 style="margin-top:16px" data-i18n="p1.title"></h3>
+        <p data-i18n="p1.body"></p>
+        <span class="tag tag-idea" data-i18n="p1.tag"></span>
+      </article>
+      <article class="card-hard lift">
+        <div class="post-top">
+          <span class="avatar a-orange">JT</span>
+          <span class="role-badge r-orange" data-i18n="p2.role"></span>
+        </div>
+        <h3 style="margin-top:16px" data-i18n="p2.title"></h3>
+        <p data-i18n="p2.body"></p>
+        <span class="tag tag-win" data-i18n="p2.tag"></span>
+      </article>
+      <article class="card-hard join">
+        <h3 data-i18n="com.join.t"></h3>
+        <p data-i18n="com.join.d"></p>
+        <a class="btn btn-on-dark" href="#/register" style="align-self:flex-start" data-i18n="com.join.btn">Qo'shilish</a>
+      </article>
+    </div>
+  </div>
+</section>
+
+<!-- pricing -->
+<section class="sec" id="pricing">
+  <div class="wrap" style="text-align:center">
+    <span class="kicker" data-rv="kicker" data-i18n="price.kicker">Narxlar</span>
+    <h2 class="sec-h2" data-rv="h2" style="margin-left:auto;margin-right:auto" data-i18n="price.title"></h2>
+    <p class="sec-sub" data-rv="sub" style="margin-left:auto;margin-right:auto" data-i18n="price.sub"></p>
+    <div class="price-grid" data-price style="text-align:left">
+      <article class="card-hard tier">
+        <div>
+          <h3 data-i18n="t1.name"></h3>
+          <p class="desc" data-i18n="t1.desc"></p>
+        </div>
+        <div class="amount" data-i18n="t1.price"></div>
+        <p class="note" data-i18n="t1.note"></p>
+        <ul class="feat">
+          <li><span class="ck ck-teal">✓</span><span data-i18n="t1.f1"></span></li>
+          <li><span class="ck ck-teal">✓</span><span data-i18n="t1.f2"></span></li>
+          <li><span class="ck ck-teal">✓</span><span data-i18n="t1.f3"></span></li>
+          <li><span class="ck ck-teal">✓</span><span data-i18n="t1.f4"></span></li>
+        </ul>
+        <a class="btn btn-secondary" href="#/register" data-i18n="t1.cta">Bepul boshlash</a>
+      </article>
+      <article class="card-hard tier tier-dark">
+        <div>
+          <h3 data-i18n="t2.name"></h3>
+          <p class="desc" data-i18n="t2.desc"></p>
+        </div>
+        <div class="amount" data-i18n="t2.price"></div>
+        <p class="note" data-i18n="t2.note"></p>
+        <ul class="feat">
+          <li><span class="ck ck-teal">✓</span><span data-i18n="t2.f1"></span></li>
+          <li><span class="ck ck-teal">✓</span><span data-i18n="t2.f2"></span></li>
+          <li><span class="ck ck-teal">✓</span><span data-i18n="t2.f3"></span></li>
+          <li><span class="ck ck-teal">✓</span><span data-i18n="t2.f4"></span></li>
+          <li><span class="ck ck-teal">✓</span><span data-i18n="t2.f5"></span></li>
+        </ul>
+        <a class="btn btn-on-dark" href="#/register" data-i18n="t2.cta">So'rov yuborish</a>
+      </article>
+    </div>
+  </div>
+</section>
+
+<!-- CTA -->
+<section class="cta-band">
+  <div class="wrap cta-in" data-cta>
+    <div>
+      <h2 data-i18n="cta.title"></h2>
+      <p data-i18n="cta.sub"></p>
+      <a class="btn btn-cream" href="#/register" style="margin-top:26px" data-i18n="cta.btn">Ro'yxatdan o'tish</a>
+    </div>
+    <div class="cta-img">
+      <img alt="" loading="lazy" src="https://image.qwenlm.ai/public_source/4ef012be-7c88-4026-b421-187911ddefc4/1f49177c9-9a9d-4916-98b9-2ece47ba0320.png">
+    </div>
+  </div>
+</section>
+
+</main>
+
+<footer class="foot">
+  <div class="wrap">
+    <div class="foot-grid">
+      <div>
+        <span class="brand" style="color:var(--card)">
+          <svg width="30" height="30" viewBox="0 0 64 64" aria-hidden="true">
+            <rect x="8" y="8" width="48" height="48" rx="12" fill="#FFFCF4"/>
+            <path d="M22 46 32 22l10 24" fill="none" stroke="#1C3547" stroke-width="5" stroke-linejoin="round" stroke-linecap="round"/>
+            <path d="M26 38h12" stroke="#1C3547" stroke-width="5" stroke-linecap="round"/>
+            <circle cx="32" cy="20" r="5" fill="#D9612F"/>
+          </svg>
+          ARDUINIUM
+        </span>
+        <p data-i18n="foot.desc"></p>
+      </div>
+      <div>
+        <h4 data-i18n="foot.platform">Platforma</h4>
+        <ul>
+          <li><a href="#features" data-i18n="nav.features"></a></li>
+          <li><a href="#videos" data-i18n="nav.videos"></a></li>
+          <li><a href="#community" data-i18n="nav.community"></a></li>
+          <li><a href="#pricing" data-i18n="nav.pricing"></a></li>
+        </ul>
+      </div>
+      <div>
+        <h4 data-i18n="foot.roles">Rollar</h4>
+        <ul>
+          <li><a href="#/register" data-i18n="foot.r1"></a></li>
+          <li><a href="#/register" data-i18n="foot.r2"></a></li>
+        </ul>
+      </div>
+    </div>
+    <div class="foot-bot">
+      <span>© <span id="year"></span> Arduinium. <span data-i18n="foot.rights"></span></span>
+      <span>Seymour Papert, Mindstorms (1980) — iqtibos tasdiqlangan.</span>
+    </div>
+  </div>
+</footer>
+
+</div><!-- /landing -->
+
+<!-- ====================================================== REGISTER ======== -->
+<div class="page page-dark" id="page-register">
+  <div class="wrap reg-top">
+    <a class="brand" href="#/" style="color:var(--card)">
+      <svg width="32" height="32" viewBox="0 0 64 64" aria-hidden="true">
+        <rect x="8" y="8" width="48" height="48" rx="12" fill="#FFFCF4"/>
+        <path d="M22 46 32 22l10 24" fill="none" stroke="#1C3547" stroke-width="5" stroke-linejoin="round" stroke-linecap="round"/>
+        <path d="M26 38h12" stroke="#1C3547" stroke-width="5" stroke-linecap="round"/>
+        <circle cx="32" cy="20" r="5" fill="#D9612F"/>
+      </svg>
+      ARDUINIUM
+    </a>
+    <div class="seg" role="group" aria-label="Language">
+      <span class="seg-knob" data-knob></span>
+      <button type="button" data-lang="uz" aria-pressed="true">UZ</button>
+      <button type="button" data-lang="en" aria-pressed="false">EN</button>
+    </div>
+  </div>
+
+  <div class="wrap reg-in">
+    <div class="reg-art a1">
+      <img alt="" loading="lazy" src="https://image.qwenlm.ai/public_source/4ef012be-7c88-4026-b421-187911ddefc4/1f49177c9-9a9d-4916-98b9-2ece47ba0320.png">
+      <span class="sticker" data-i18n="reg.sticker">Bepul • Karta shart emas</span>
+    </div>
+
+    <div>
+      <span class="kicker a1" data-i18n="reg.kicker">Ro'yxatdan o'tish</span>
+      <h2 class="sec-h2 a2" data-i18n="reg.title"></h2>
+      <p class="sec-sub a2" data-i18n="reg.sub"></p>
+
+      <div class="stepper a3">
+        <span class="st on" id="st1"><b>1</b><span data-i18n="reg.step1"></span></span>
+        <span class="st" id="st2"><b>2</b><span data-i18n="reg.step2"></span></span>
+        <span class="st" id="st3"><b>3</b><span data-i18n="reg.step3"></span></span>
+      </div>
+
+      <div id="regStep1">
+        <div class="role-grid a4">
+          <button class="role" type="button" data-role="student" aria-pressed="false">
+            <span class="tile t-teal"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><rect x="6" y="6" width="12" height="12" rx="2.5"/><path d="M9 2v4M15 2v4M9 18v4M15 18v4M2 9h4M2 15h4M18 9h4M18 15h4" stroke-linecap="round"/></svg></span>
+            <span><span class="rt" data-i18n="role1.t"></span><span class="rd" data-i18n="role1.d"></span></span>
+          </button>
+          <button class="role" type="button" data-role="teacher" aria-pressed="false">
+            <span class="tile t-orange"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round"><path d="M12 4L2 9l10 5 10-5z"/><path d="M6 11.5V17c0 1.7 2.7 3 6 3s6-1.3 6-3v-5.5"/></svg></span>
+            <span><span class="rt" data-i18n="role2.t"></span><span class="rd" data-i18n="role2.d"></span></span>
+          </button>
+        </div>
+      </div>
+
+      <form id="regStep2" class="form-card a5" style="display:none" novalidate>
+        <div class="frow" id="regFields"></div>
+        <div id="regNote"></div>
+        <button class="btn btn-primary" type="submit" style="margin-top:22px" data-i18n="reg.submit">Yuborish</button>
+      </form>
+
+      <div id="regStep3" class="card-hard success a5" style="display:none;color:var(--navy)">
+        <span class="tile t-teal"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></span>
+        <h3 style="font-size:24px" data-i18n="reg.success.t"></h3>
+        <p class="role-line" id="regRoleLine"></p>
+        <p style="color:color-mix(in srgb,var(--navy) 72%,transparent)" data-i18n="reg.success.d"></p>
+        <div style="display:flex;gap:12px;flex-wrap:wrap">
+          <a class="btn btn-primary" href="#/app" data-i18n="reg.success.go"></a>
+          <button class="btn btn-secondary" type="button" id="regChange" data-i18n="reg.change"></button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- =========================================================== APP ======== -->
+<div class="page page-dark" id="page-app">
+  <div class="wrap app-head">
+    <div>
+      <span class="app-badge" id="appRole"></span>
+      <h2 class="sec-h2" style="font-size:clamp(24px,3.4vw,34px);margin-top:14px">
+        <span data-i18n="app.welcome"></span> <span id="appName"></span>
+      </h2>
+    </div>
+    <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+      <div class="seg" role="group" aria-label="Language">
+        <span class="seg-knob" data-knob></span>
+        <button type="button" data-lang="uz" aria-pressed="true">UZ</button>
+        <button type="button" data-lang="en" aria-pressed="false">EN</button>
+      </div>
+      <a class="btn btn-on-dark btn-sm" href="#/register" data-i18n="reg.change"></a>
+      <a class="btn btn-cream btn-sm" href="#/" data-i18n="app.home"></a>
+    </div>
+  </div>
+  <div class="wrap"><div id="appBody"></div></div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/ScrollTrigger.min.js"></script>
+<script>
+(function(){
+"use strict";
+
+/* ===================================================================== i18n
+   Flat keys, exactly as specified. Keys like "t1" (teacher outcome) and
+   "t1.name" (pricing tier) are distinct strings, so a flat map is safe. */
+var DICT = {
+uz:{
+"_title":"Arduinium — Robotika ustaxonasi","skip":"Asosiy kontentga o'tish",
+"nav.features":"Imkoniyatlar","nav.how":"Qanday ishlaydi","nav.videos":"Video darslar",
+"nav.community":"Hamjamiyat","nav.pricing":"Narxlar","nav.cta":"Ro'yxatdan o'tish",
+"hero.badge":"Robotika • Arduino • Kod",
+"hero.t1":"Robotikani brauzerda o'rganing —","hero.t2":"qurilma shart emas",
+"hero.sub":"Arduinium — maktab o'quvchilari uchun virtual sxema va kod sandbox'i. Real platalar xarid qilmasdan LED yondiring, tugmalarni ulang va robotlarni dasturlashni o'rganing.",
+"hero.cta1":"Bepul boshlash","hero.cta2":"Narxlarni ko'rish",
+"hero.hint":"Biror joyga bosing — butun sahifa jonlanadi",
+"prob.kicker":"Muammo","prob.title":"Nega virtual laboratoriya?",
+"prob.sub":"Robotika ta'limi yo'lida uchta katta to'siq turadi. Arduinium uchalasini ham yechadi.",
+"p1.t":"Qimmat uskunalar","p1.d":"Arduino to'plamlari har bir o'quvchi uchun qimmatga tushadi. Virtual sandbox har bir bolaga bepul ish stansiyasini beradi.",
+"p2.t":"O'qituvchilar tanqis","p2.d":"Robotika o'qituvchilari kam. Biz informatika o'qituvchilarini tayyorlaymiz va tayyor darsliklar beramiz.",
+"p3.t":"Singan detallar qo'rquvi","p3.d":"Virtual sxemada noto'g'ri ulanish hech narsani kuydirmaydi — bolalar bemalol eksperiment qiladi.",
+"feat.kicker":"Imkoniyatlar","feat.title":"Bitta platforma — hammasi ichida",
+"feat.sub":"O'rganish, o'qitish va ulashish uchun kerak bo'lgan barcha asboblar.",
+"f1.t":"Virtual sandbox","f1.d":"Tinkercad uslubidagi sxema va kod muharriri: LED, tugma, sensorlar — hammasi brauzerda.",
+"f2.t":"O'zbek tilidagi darslar","f2.d":"Bosqichma-bosqich matn darslar, har biri sandbox mashqlari bilan.",
+"f3.t":"Video darslar","f3.d":"Qisqa va aniq videolar — bolalar uchun ham, o'qituvchilar uchun alohida trek.",
+"f4.t":"Hamjamiyat","f4.d":"O'qituvchilar va o'quvchilar loyihalar, savollar va g'oyalar bilan o'rtoqlashadi.",
+"f5.t":"O'qituvchi treki","f5.d":"Informatika o'qituvchisini robotika o'qituvchisiga aylantiruvchi sertifikatlash kurslari.",
+"f6.t":"Nishonlar va progress","f6.d":"Har bir yakunlangan dars uchun nishon — motivatsiya doim yuqori.",
+"how.kicker":"Qanday ishlaydi","how.title":"To'rt qadamda birinchi loyihangiz",
+"s1.t":"Ro'yxatdan o'ting","s1.d":"Rolni tanlang: o'quvchi, o'qituvchi yoki maktab vakili.",
+"s2.t":"Sxema yig'ing","s2.d":"Komponentlarni tanlang va virtual breadboard'ga joylashtiring.",
+"s3.t":"Kod yozing","s3.d":"pinMode, digitalWrite, delay — yozing va ishga tushiring.",
+"s4.t":"Ulashing","s4.d":"Loyihani hamjamiyatda ko'rsating, nishonlar to'plang.",
+"ach.kicker":"Natijalar","ach.title":"Kim nimalarga erishadi","ach.kids":"O'quvchi","ach.teach":"O'qituvchi",
+"k1":"Elektr zanjirlarini mustaqil yig'ish","k2":"Arduino kodini yozish va o'qish",
+"k3":"Muammolarni bartaraf etish ko'nikmasi","k4":"Shaxsiy loyiha portfoliosi",
+"t1":"Robotika bo'yicha sertifikatlash treki","t2":"Tayyor dars rejalari va materiallar",
+"t3":"Sinfda virtual laboratoriya","t4":"Hamjamiyatda tajriba almashish",
+"quote.trans":"Tarjima: Bugungi ko'pgina maktablarda «kompyuter yordamida o'qitish» iborasi kompyuter bolani o'qitishini anglatadi. Mening tasavvurimda esa bola kompyuterni o'zi dasturlaydi — va shu orqali zamonaviy texnologiya ustidan o'zlashtirish hissini hamda fan, matematika va intellektual modellar qurish san'atining eng chuqur g'oyalari bilan yaqin aloqani qo'lga kiritadi.",
+"vid.kicker":"Video darslar","vid.title":"Ko'rib o'rganing",
+"vid.sub":"Qisqa, aniq va amaliy — sinab ko'rish uchun tayyor.","vid.all":"Barchasini ko'rish",
+"v1.t":"Arduino bilan tanishuv","v2.t":"LEDni miltillatish","v3.t":"Tugma va raqamli kirish",
+"v1.l":"Boshlang'ich","v2.l":"Boshlang'ich","v3.l":"O'rta",
+"com.kicker":"Hamjamiyat","com.title":"Birga o'samiz",
+"com.sub":"O'qituvchilar va o'quvchilar — bitta do'stona maydonda.",
+"p1.tag":"G'oya","p1.role":"O'qituvchi","p1.title":"Birinchi dars: virtual laboratoriya",
+"p1.body":"5-sinf bilan birinchi darsni sandbox'da o'tkazdim — bitta ham plata kerak bo'lmadi.",
+"p2.tag":"Muvaffaqiyat hikoyasi","p2.role":"O'quvchi","p2.title":"Svetofor loyiham ishlaydi!",
+"p2.body":"Uch LED, ikki tugma va bir oz kod — endi navbat servo motorda.",
+"com.join.t":"Hamjamiyatga qo'shiling","com.join.d":"Savol bering, loyihangizni ko'rsating, tajriba almashing.","com.join.btn":"Qo'shilish",
+"price.kicker":"Narxlar","price.title":"Oddiy va halol narxlar","price.sub":"Bepul boshlang — maktablar uchun moslashuvchan taklif.",
+"t1.name":"Shaxsiy","t1.desc":"Har bir o'quvchi uchun","t1.price":"Bepul","t1.note":"Yashirin to'lovlarsiz",
+"t1.f1":"Virtual sandbox","t1.f2":"Matn darslari","t1.f3":"Boshlang'ich video darslar","t1.f4":"Hamjamiyat","t1.cta":"Bepul boshlash",
+"t2.name":"Maktab / Sinf","t2.desc":"Butun sinf uchun","t2.price":"So'rov asosida","t2.note":"Har bir maktabga moslashuvchan",
+"t2.f1":"Shaxsiy tarafdagi hamma narsa","t2.f2":"O'qituvchi treki va sertifikat","t2.f3":"Sinf paneli va progress","t2.f4":"Dars rejalari va metodika","t2.f5":"Ustuvor yordam","t2.cta":"So'rov yuborish",
+"reg.kicker":"Ro'yxatdan o'tish","reg.title":"Rolingizni tanlang",
+"reg.sub":"Keyinroq yana rol qo'shish mumkin — hozircha o'zingizga mosini tanlang.",
+"reg.sticker":"Bepul • Karta shart emas","reg.step1":"Rol","reg.step2":"Ma'lumotlar","reg.step3":"Tayyor",
+"role1.t":"O'quvchiman","role1.d":"Robotikani o'rganmoqchiman",
+"role2.t":"O'qituvchiman","role2.d":"Sinfimda robotika o'qitmoqchiman",
+"f.name":"Ism familiya","ph.name":"Masalan: Ali Valiyev","f.grade":"Sinf","f.school":"Maktab",
+"ph.school":"Masalan: 12-maktab","f.subject":"Fan","f.email":"Email",
+"subj1":"Informatika","subj2":"Texnologiya","subj3":"Boshqa",
+"reg.submit":"Yuborish","reg.success.t":"Xush kelibsiz!",
+"reg.success.d":"Hisobingiz (demo) yaratildi. Endi o'z panelingizga o'ting.",
+"reg.success.go":"Panelga o'tish","reg.change":"Rolni o'zgartirish",
+"app.welcome":"Xush kelibsiz,","app.home":"Bosh sahifaga",
+"app.role.student":"O'quvchi","app.role.teacher":"O'qituvchi",
+"app.c1":"Darslar katalogi","app.c1d":"«Arduino nima?», «LED miltillatish», «Tugma va kirish» — ro'yxat tayyor.",
+"app.c2":"Simulator","app.c2d":"Virtual sxema va kod sandbox'i — MVP sifatida ishlab chiqilmoqda.",
+"app.c3":"Video darslar","app.c3d":"Bolalar uchun videolar va o'qituvchilar treki.",
+"app.c4":"Hamjamiyat","app.c4d":"Loyihalaringizni ulashing va savol bering.",
+"tag.soon":"Tez orada","tag.mvp":"MVP",
+"app.teacher.lead":"O'qituvchi paneli va sertifikatlash treki hozirlanmoqda — tez orada shu yerda bo'ladi.",
+"cta.title":"Kelajakni bugun quring","cta.sub":"Birinchi dars — bepul, karta talab qilinmaydi.","cta.btn":"Ro'yxatdan o'tish",
+"foot.desc":"Maktab o'quvchilari uchun brauzerda Arduino, elektronika va robotika platformasi.",
+"foot.platform":"Platforma","foot.roles":"Rollar","foot.r1":"O'quvchi","foot.r2":"O'qituvchi",
+"foot.rights":"Barcha huquqlar himoyalangan."
+},
+en:{
+"_title":"Arduinium — Robotics Workshop","skip":"Skip to main content",
+"nav.features":"Features","nav.how":"How it works","nav.videos":"Video lessons",
+"nav.community":"Community","nav.pricing":"Pricing","nav.cta":"Register",
+"hero.badge":"Robotics • Arduino • Code",
+"hero.t1":"Learn robotics in your browser —","hero.t2":"no hardware needed",
+"hero.sub":"Arduinium is a virtual circuit & code sandbox for school students. Light LEDs, wire buttons and program robots — without buying a single component.",
+"hero.cta1":"Start for free","hero.cta2":"See pricing",
+"hero.hint":"Click anywhere — the whole page ripples",
+"prob.kicker":"The problem","prob.title":"Why a virtual lab?",
+"prob.sub":"Three big barriers block robotics education. Arduinium removes all three.",
+"p1.t":"Expensive hardware","p1.d":"Arduino kits are costly per student. The virtual sandbox gives every child a free workstation.",
+"p2.t":"Teacher shortage","p2.d":"Robotics teachers are rare. We train informatics teachers and provide ready-made lessons.",
+"p3.t":"Fear of broken parts","p3.d":"In a virtual circuit a wrong wire burns nothing — kids experiment fearlessly.",
+"feat.kicker":"Features","feat.title":"One platform — everything inside",
+"feat.sub":"Every tool you need to learn, teach and share.",
+"f1.t":"Virtual sandbox","f1.d":"A Tinkercad-style circuit & code editor: LEDs, buttons, sensors — all in the browser.",
+"f2.t":"Lessons in Uzbek","f2.d":"Step-by-step text lessons, each paired with sandbox exercises.",
+"f3.t":"Video lessons","f3.d":"Short, clear videos — for kids, plus a separate teacher track.",
+"f4.t":"Community","f4.d":"Teachers and students share projects, questions and ideas.",
+"f5.t":"Teacher track","f5.d":"Certification courses that turn informatics teachers into robotics teachers.",
+"f6.t":"Badges & progress","f6.d":"A badge for every finished lesson — motivation stays high.",
+"how.kicker":"How it works","how.title":"Your first project in four steps",
+"s1.t":"Register","s1.d":"Pick a role: student, teacher or school representative.",
+"s2.t":"Build a circuit","s2.d":"Choose components and place them on the virtual breadboard.",
+"s3.t":"Write code","s3.d":"pinMode, digitalWrite, delay — write it and run it.",
+"s4.t":"Share it","s4.d":"Show your project to the community and collect badges.",
+"ach.kicker":"Outcomes","ach.title":"Who achieves what","ach.kids":"Student","ach.teach":"Teacher",
+"k1":"Assembling electric circuits independently","k2":"Writing and reading Arduino code",
+"k3":"Debugging and problem-solving skills","k4":"A personal project portfolio",
+"t1":"A robotics certification track","t2":"Ready-made lesson plans & materials",
+"t3":"A virtual lab for the classroom","t4":"Peer experience sharing",
+"quote.trans":"",
+"vid.kicker":"Video lessons","vid.title":"Learn by watching",
+"vid.sub":"Short, clear and hands-on.","vid.all":"See all videos",
+"v1.t":"Meet the Arduino","v2.t":"Blink an LED","v3.t":"Buttons & digital input",
+"v1.l":"Beginner","v2.l":"Beginner","v3.l":"Intermediate",
+"com.kicker":"Community","com.title":"Growing together",
+"com.sub":"Teachers and students — one friendly space.",
+"p1.tag":"Idea","p1.role":"Teacher","p1.title":"First lesson: the virtual lab",
+"p1.body":"I taught my 5th grade first lesson in the sandbox — not a single board needed.",
+"p2.tag":"Success story","p2.role":"Student","p2.title":"My traffic-light project works!",
+"p2.body":"Three LEDs, two buttons and some code — next up: the servo motor.",
+"com.join.t":"Join the community","com.join.d":"Ask questions, show your projects, share experience.","com.join.btn":"Join",
+"price.kicker":"Pricing","price.title":"Simple, honest pricing","price.sub":"Start free — flexible offers for schools.",
+"t1.name":"Individual","t1.desc":"For every student","t1.price":"Free","t1.note":"No hidden fees",
+"t1.f1":"Virtual sandbox","t1.f2":"Text lessons","t1.f3":"Beginner video lessons","t1.f4":"Community access","t1.cta":"Start free",
+"t2.name":"School / Classroom","t2.desc":"For the whole class","t2.price":"Quote-based","t2.note":"Flexible for every school",
+"t2.f1":"Everything in Individual","t2.f2":"Teacher track & certificate","t2.f3":"Class dashboard & progress","t2.f4":"Lesson plans & methodics","t2.f5":"Priority support","t2.cta":"Request a quote",
+"reg.kicker":"Register","reg.title":"Pick your role",
+"reg.sub":"You can add more roles later — pick the one that fits you today.",
+"reg.sticker":"Free • No card required","reg.step1":"Role","reg.step2":"Details","reg.step3":"Done",
+"role1.t":"I'm a student","role1.d":"I want to learn robotics",
+"role2.t":"I'm a teacher","role2.d":"I want to teach robotics in my class",
+"f.name":"Full name","ph.name":"e.g. Ali Valiyev","f.grade":"Grade","f.school":"School",
+"ph.school":"e.g. School #12","f.subject":"Subject","f.email":"Email",
+"subj1":"Informatics","subj2":"Technology","subj3":"Other",
+"reg.submit":"Submit","reg.success.t":"Welcome!",
+"reg.success.d":"Your account (demo) was created. Now head to your dashboard.",
+"reg.success.go":"Go to my dashboard","reg.change":"Change role",
+"app.welcome":"Welcome,","app.home":"Back to home",
+"app.role.student":"Student","app.role.teacher":"Teacher",
+"app.c1":"Lesson catalog","app.c1d":"“What is Arduino?”, “Blink an LED”, “Buttons & input” — the list is ready.",
+"app.c2":"Simulator","app.c2d":"Virtual circuit & code sandbox — being built as MVP.",
+"app.c3":"Video lessons","app.c3d":"Videos for kids plus a teacher track.",
+"app.c4":"Community","app.c4d":"Share your projects and ask questions.",
+"tag.soon":"Soon","tag.mvp":"MVP",
+"app.teacher.lead":"The teacher dashboard & certification track are being prepared — coming soon right here.",
+"cta.title":"Build the future today","cta.sub":"Your first lesson is free — no card required.","cta.btn":"Register",
+"foot.desc":"A browser-based Arduino, electronics and robotics platform for school students.",
+"foot.platform":"Platform","foot.roles":"Roles","foot.r1":"Student","foot.r2":"Teacher",
+"foot.rights":"All rights reserved."
+}};
+
+/* Papert, Mindstorms (1980) — reproduced verbatim, English only, never edited. */
+var QUOTE = 'In many schools today, the phrase “computer-aided instruction” means making the computer teach the child. One might say the computer is being used to program the child. In my vision, the child programs the computer and, in doing so, both acquires a sense of mastery over a piece of the most modern and powerful technology and establishes an intimate contact with some of the deepest ideas from science, from mathematics, and from the art of intellectual model building.';
+
+/* ================================================================ helpers */
+var $  = function(s,r){ return (r||document).querySelector(s); };
+var $$ = function(s,r){ return Array.prototype.slice.call((r||document).querySelectorAll(s)); };
+var LS = {
+  get:function(k){ try{ return window.localStorage.getItem(k); }catch(e){ return null; } },
+  set:function(k,v){ try{ window.localStorage.setItem(k,v); }catch(e){} }
+};
+var REDUCED = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+var HAS_GSAP = typeof window.gsap !== 'undefined';
+var HAS_ST   = HAS_GSAP && typeof window.ScrollTrigger !== 'undefined';
+if (HAS_ST) { try { gsap.registerPlugin(ScrollTrigger); } catch(e){ HAS_ST = false; } }
+
+/* ================================================================== i18n UI */
+var lang = LS.get('arduinium-lang');
+if (lang !== 'uz' && lang !== 'en') lang = 'uz';
+
+function t(key){
+  var d = DICT[lang] || DICT.uz;
+  return Object.prototype.hasOwnProperty.call(d, key) ? d[key] : key;
+}
+
+/**
+ * Wrap each word of a section heading in its own span so it can be revealed
+ * one word at a time.
+ *
+ * Re-run on every language switch, because applyI18n writes textContent and
+ * that wipes the spans. Freshly split words carry no inline styles, so a
+ * heading is always visible by default — the animation only ever animates
+ * *into* the resting state, never out of it.
+ */
+function splitHeadings(){
+  $$('[data-rv="h2"]').forEach(function(h){
+    var text = h.textContent.trim();
+    if (!text || h.querySelector('.w')) return;
+    var frag = document.createDocumentFragment();
+    text.split(/\s+/).forEach(function(word, i){
+      if (i) frag.appendChild(document.createTextNode(' '));
+      var s = document.createElement('span');
+      s.className = 'w';
+      s.textContent = word;
+      frag.appendChild(s);
+    });
+    h.textContent = '';
+    h.appendChild(frag);
+  });
+}
+
+function applyI18n(){
+  document.documentElement.lang = lang;
+  document.title = t('_title');
+  $$('[data-i18n]').forEach(function(el){
+    var v = t(el.getAttribute('data-i18n'));
+    if (typeof v === 'string') el.textContent = v;
+  });
+  splitHeadings();
+  $$('[data-i18n-ph]').forEach(function(el){
+    el.setAttribute('placeholder', t(el.getAttribute('data-i18n-ph')));
+  });
+  var q = $('#quoteText'); if (q) q.textContent = QUOTE;   // never translated
+  $$('.seg').forEach(function(seg){
+    var knob = seg.querySelector('[data-knob]');
+    if (knob) knob.style.transform = 'translateX(' + (lang === 'en' ? 100 : 0) + '%)';
+    $$('button[data-lang]', seg).forEach(function(b){
+      b.setAttribute('aria-pressed', String(b.getAttribute('data-lang') === lang));
+    });
+  });
+  renderTicker();
+  if ($('#page-app') && $('#page-app').classList.contains('active')) renderApp();
+  if ($('#regStep2') && $('#regStep2').style.display !== 'none') renderFields();
+}
+
+function setLang(next){
+  if (next !== 'uz' && next !== 'en') return;
+  lang = next; LS.set('arduinium-lang', next); applyI18n();
+}
+
+$$('button[data-lang]').forEach(function(b){
+  b.addEventListener('click', function(){ setLang(b.getAttribute('data-lang')); });
+});
+
+/* ================================================================== ticker */
+function renderTicker(){
+  var host = $('#ticker'); if (!host) return;
+  var words = ['Arduino','LED','Servo','Sensor','Breadboard','pinMode','digitalWrite','delay',
+               (lang === 'uz' ? 'Robotika' : 'Robotics'), (lang === 'uz' ? 'Kod' : 'Code')];
+  var one = words.map(function(w){ return '<span>' + w + ' <b>&#10022;</b></span>'; }).join('');
+  host.innerHTML = one + one;   // two copies, so -50% translate loops seamlessly
+}
+
+/* ================================================================== router */
+var PAGES = { '#/':'page-landing', '#/register':'page-register', '#/app':'page-app' };
+
+function currentRoute(){
+  var h = window.location.hash || '#/';
+  if (h.indexOf('#/') !== 0) return '#/';
+  return PAGES[h] ? h : '#/';
+}
+
+function showPage(route){
+  // #/app is only reachable with a saved role; otherwise bounce to register.
+  if (route === '#/app' && !readReg()){
+    window.location.replace('#/register');
+    return;
+  }
+  var id = PAGES[route] || 'page-landing';
+  $$('.page').forEach(function(p){
+    var on = (p.id === id);
+    p.classList.toggle('active', on);
+    if (on){ p.classList.remove('enter'); void p.offsetWidth; p.classList.add('enter'); }
+  });
+  window.scrollTo(0,0);
+  if (id === 'page-app') renderApp();
+  if (id === 'page-register') resetRegisterView();
+  if (id === 'page-landing' && HAS_ST){ try{ ScrollTrigger.refresh(); }catch(e){} }
+}
+
+window.addEventListener('hashchange', function(){ showPage(currentRoute()); });
+
+/* In-page anchors are scrolled by JS rather than by the native anchor, so a
+   router hash and a section hash can coexist without fighting each other. */
+document.addEventListener('click', function(ev){
+  var a = ev.target && ev.target.closest ? ev.target.closest('a[href^="#"]') : null;
+  if (!a) return;
+  var href = a.getAttribute('href');
+  if (!href || href === '#') return;
+  if (href.indexOf('#/') === 0) return;             // let the router handle it
+  var target = document.getElementById(href.slice(1));
+  if (!target) return;
+  ev.preventDefault();
+  closeMenu();
+  target.scrollIntoView({ behavior: REDUCED ? 'auto' : 'smooth', block:'start' });
+});
+
+/* ============================================================ mobile menu  */
+var burger = $('#burger'), mmenu = $('#mmenu');
+function closeMenu(){
+  if (burger) { burger.classList.remove('open'); burger.setAttribute('aria-expanded','false'); }
+  if (mmenu) mmenu.classList.remove('open');
+}
+if (burger && mmenu){
+  burger.addEventListener('click', function(){
+    var open = burger.classList.toggle('open');
+    burger.setAttribute('aria-expanded', String(open));
+    mmenu.classList.toggle('open', open);
+  });
+  $$('a', mmenu).forEach(function(a){ a.addEventListener('click', closeMenu); });
+}
+
+var nav = $('#nav');
+if (nav){
+  var onScroll = function(){ nav.classList.toggle('scrolled', window.scrollY > 8); };
+  window.addEventListener('scroll', onScroll, { passive:true }); onScroll();
+}
+
+/* ================================================================ register */
+/**
+ * Two roles only.
+ *
+ * "Xarid qilmoqchiman" (buyer) was dropped because buying is open to anyone
+ * who registers — it is not a distinct kind of account. "Maktab vakiliman"
+ * (school representative) was dropped because school access is granted
+ * separately rather than self-served through this form.
+ */
+var FIELDS = {
+  student:[['name','text',true],['grade','select-grade',false],['school','text',false]],
+  teacher:[['name','text',true],['subject','select-subject',false],['school','text',true]]
+};
+var ROLES = ['student','teacher'];
+var pickedRole = null;
+
+function esc(s){ return String(s).replace(/[&<>"]/g, function(c){
+  return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]; }); }
+
+function renderFields(){
+  var host = $('#regFields'); if (!host || !pickedRole) return;
+  var rows = FIELDS[pickedRole] || [];
+  host.innerHTML = rows.map(function(f){
+    var key = f[0], type = f[1], req = f[2];
+    var id = 'rf-' + key;
+    var label = t('f.' + key);
+    var ctrl;
+    if (type === 'select-grade'){
+      var opts = '';
+      for (var g = 1; g <= 11; g++) opts += '<option value="'+g+'"'+(g===5?' selected':'')+'>'+g+'</option>';
+      ctrl = '<select id="'+id+'" name="'+key+'">'+opts+'</select>';
+    } else if (type === 'select-subject'){
+      ctrl = '<select id="'+id+'" name="'+key+'"><option>'+esc(t('subj1'))+'</option><option>'+
+             esc(t('subj2'))+'</option><option>'+esc(t('subj3'))+'</option></select>';
+    } else {
+      var ph = (key === 'name' || key === 'school') ? t('ph.' + key) : '';
+      ctrl = '<input id="'+id+'" name="'+key+'" type="'+type+'" placeholder="'+esc(ph)+'"'+
+             (req ? ' data-req="1"' : '')+'>';
+    }
+    return '<div class="f" data-f="'+key+'"><label for="'+id+'">'+esc(label)+
+           (req ? ' *' : '')+'</label>'+ctrl+'</div>';
+  }).join('');
+
+  var note = $('#regNote');
+  if (note) note.innerHTML = '';
+}
+
+function setStep(n){
+  [['#st1',1],['#st2',2],['#st3',3]].forEach(function(pair){
+    var el = $(pair[0]); if (!el) return;
+    el.classList.toggle('on',   pair[1] === n);
+    el.classList.toggle('done', pair[1] <  n);
+  });
+  var s1 = $('#regStep1'), s2 = $('#regStep2'), s3 = $('#regStep3');
+  if (s1) s1.style.display = (n === 1) ? '' : 'none';
+  if (s2) s2.style.display = (n === 2) ? '' : 'none';
+  if (s3) s3.style.display = (n === 3) ? '' : 'none';
+}
+
+$$('.role').forEach(function(btn){
+  btn.addEventListener('click', function(){
+    pickedRole = btn.getAttribute('data-role');
+    $$('.role').forEach(function(b){ b.setAttribute('aria-pressed', String(b === btn)); });
+    renderFields();
+    setStep(2);
+    var s2 = $('#regStep2');
+    if (s2 && s2.scrollIntoView) s2.scrollIntoView({ behavior: REDUCED ? 'auto':'smooth', block:'nearest' });
+  });
+});
+
+var regForm = $('#regStep2');
+if (regForm){
+  regForm.addEventListener('submit', function(ev){
+    ev.preventDefault();
+    var ok = true;
+    $$('[data-req]', regForm).forEach(function(inp){
+      var wrap = inp.closest('.f');
+      if (!inp.value.trim()){
+        ok = false;
+        if (wrap){ wrap.classList.remove('bad'); void wrap.offsetWidth; wrap.classList.add('bad');
+          window.setTimeout(function(){ wrap.classList.remove('bad'); }, 1300); }
+      }
+    });
+    if (!ok) return;
+
+    var data = { role: pickedRole };
+    $$('input,select', regForm).forEach(function(el){ if (el.name) data[el.name] = el.value; });
+    LS.set('arduinium-reg', JSON.stringify(data));
+
+    var line = $('#regRoleLine');
+    if (line) line.textContent = t('app.role.' + pickedRole) + ' · ' + (data.name || '');
+    setStep(3);
+  });
+}
+
+var regChange = $('#regChange');
+if (regChange) regChange.addEventListener('click', function(){
+  pickedRole = null;
+  $$('.role').forEach(function(b){ b.setAttribute('aria-pressed','false'); });
+  setStep(1);
+});
+
+function resetRegisterView(){
+  var saved = readReg();
+  if (saved && saved.role){
+    pickedRole = saved.role;
+    $$('.role').forEach(function(b){
+      b.setAttribute('aria-pressed', String(b.getAttribute('data-role') === saved.role));
+    });
+    var line = $('#regRoleLine');
+    if (line) line.textContent = t('app.role.' + saved.role) + ' · ' + (saved.name || '');
+    setStep(3);
+  } else {
+    pickedRole = null;
+    $$('.role').forEach(function(b){ b.setAttribute('aria-pressed','false'); });
+    setStep(1);
+  }
+}
+
+function readReg(){
+  var raw = LS.get('arduinium-reg');
+  if (!raw) return null;
+  try {
+    var o = JSON.parse(raw);
+    // A role that no longer exists (an older save with "school" or "buyer")
+    // is treated as no registration at all, so #/app bounces to the picker
+    // instead of rendering a stub for a role we removed.
+    return (o && ROLES.indexOf(o.role) !== -1) ? o : null;
+  } catch(e){ return null; }
+}
+
+/* ===================================================================== app */
+function renderApp(){
+  var reg = readReg(); if (!reg) return;
+  var badge = $('#appRole'), nameEl = $('#appName'), body = $('#appBody');
+  if (badge)  badge.textContent = t('app.role.' + reg.role);
+  if (nameEl) nameEl.textContent = reg.name || '';
+  if (!body) return;
+
+  if (reg.role === 'student'){
+    var cards = [
+      ['app.c1','app.c1d','soon','t-teal'],
+      ['app.c2','app.c2d','mvp','t-orange'],
+      ['app.c3','app.c3d','soon','t-pink'],
+      ['app.c4','app.c4d','soon','t-teal']
+    ];
+    body.innerHTML = '<div class="app-grid">' + cards.map(function(c){
+      var tag = (c[2] === 'mvp')
+        ? '<span class="soon s-teal">' + esc(t('tag.mvp')) + '</span>'
+        : '<span class="soon s-gray">' + esc(t('tag.soon')) + '</span>';
+      return '<article class="card-hard app-card lift">' +
+        '<div style="display:flex;align-items:center;justify-content:space-between;gap:12px">' +
+        '<span class="tile ' + c[3] + '">&#9670;</span>' + tag + '</div>' +
+        '<h3>' + esc(t(c[0])) + '</h3><p>' + esc(t(c[1])) + '</p></article>';
+    }).join('') + '</div>';
+  } else {
+    body.innerHTML = '<div class="card-hard stub app-card">' +
+      '<span class="tile t-orange">&#9670;</span>' +
+      '<p style="font-size:17px;font-weight:600">' + esc(t('app.' + reg.role + '.lead')) + '</p>' +
+      '<a class="btn btn-primary" href="#/">' + esc(t('app.home')) + '</a></div>';
+  }
+}
+
+/* =============================================================== ripple fx
+   Cell grid at 46px. A pointerdown anywhere sends a Manhattan wavefront out
+   from the clicked cell: each cell lights 80ms per step of distance, for
+   520ms, alpha = sin(progress·π). The rAF loop parks itself when no wave is
+   alive so the page costs nothing at rest. Disabled entirely under
+   prefers-reduced-motion. */
+var RIPPLES = [];
+function makeRipple(canvas, host, outer, inner){
+  var ctx = canvas && canvas.getContext ? canvas.getContext('2d') : null;
+  if (!ctx) return null;
+
+  var CELL = 46, LIFE = 520, STEP = 80;
+  var w = 0, h = 0, cols = 0, rows = 0, waves = [], running = false;
+
+  function box(){
+    return host === window
+      ? { w: window.innerWidth, h: window.innerHeight }
+      : { w: host.clientWidth, h: host.clientHeight };
+  }
+
+  function resize(){
+    var b = box(); w = b.w; h = b.h;
+    var dpr = Math.min(window.devicePixelRatio || 1, 2);
+    canvas.width = Math.max(1, Math.floor(w * dpr));
+    canvas.height = Math.max(1, Math.floor(h * dpr));
+    canvas.style.width = w + 'px'; canvas.style.height = h + 'px';
+    ctx.setTransform(dpr,0,0,dpr,0,0);
+    cols = Math.ceil(w / CELL); rows = Math.ceil(h / CELL);
+  }
+
+  function frame(now){
+    ctx.clearRect(0,0,w,h);
+    var alive = false;
+    for (var i = 0; i < waves.length; i++){
+      var wv = waves[i], age = now - wv.t0;
+      var dMin = Math.max(0, Math.floor((age - LIFE) / STEP));
+      var dMax = Math.floor(age / STEP);
+      if (dMax < 0 || dMin > cols + rows) continue;
+      alive = true;
+      for (var r = 0; r < rows; r++){
+        for (var c = 0; c < cols; c++){
+          var d = Math.abs(c - wv.cx) + Math.abs(r - wv.cy);
+          if (d < dMin || d > dMax) continue;
+          var lt = age - d * STEP;
+          if (lt < 0 || lt > LIFE) continue;
+          var a = Math.sin((lt / LIFE) * Math.PI);
+          if (a <= 0.01) continue;
+          var x = c * CELL, y = r * CELL;
+          ctx.fillStyle = outer.replace('$', (a * outerA).toFixed(3));
+          ctx.fillRect(x + 9, y + 9, CELL - 18, CELL - 18);
+          ctx.fillStyle = inner.replace('$', (a * innerA).toFixed(3));
+          ctx.fillRect(x + 17, y + 17, CELL - 34, CELL - 34);
+        }
+      }
+    }
+    waves = waves.filter(function(v){ return (now - v.t0) < (LIFE + (cols + rows) * STEP); });
+    if (alive || waves.length) window.requestAnimationFrame(frame);
+    else { running = false; ctx.clearRect(0,0,w,h); }
+  }
+
+  var outerA = 0.30, innerA = 0.22;
+  var api = {
+    resize: resize,
+    /** Page coordinates in; the canvas maps them into its own box. */
+    at: function(px, py){
+      var ox = 0, oy = 0;
+      if (host !== window){
+        var r = host.getBoundingClientRect();
+        ox = r.left; oy = r.top;
+        if (px < r.left || px > r.right || py < r.top || py > r.bottom) return;
+      }
+      api.cell(Math.floor((px - ox) / CELL), Math.floor((py - oy) / CELL));
+    },
+    cell: function(cx, cy){
+      waves.push({ cx:cx, cy:cy, t0:(window.performance ? performance.now() : Date.now()) });
+      if (waves.length > 6) waves.shift();
+      if (!running){ running = true; window.requestAnimationFrame(frame); }
+    },
+    ambient: function(){ api.cell(Math.floor(Math.random()*cols), Math.floor(Math.random()*rows)); },
+    alpha: function(o, n){ outerA = o; innerA = n; }
+  };
+
+  resize();
+  return api;
+}
+
+if (!REDUCED){
+  var rGlobal = makeRipple($('#fx'), window, 'rgba(30,143,130,$)', 'rgba(217,97,47,$)');
+  var heroEl  = $('.hero');
+  var rHero   = heroEl ? makeRipple($('#fxHero'), heroEl, 'rgba(45,190,172,$)', 'rgba(232,124,68,$)') : null;
+  /* Slightly brighter than the page value so it reads on navy at all, but
+     well under it in absolute terms: at 0.42 the wave dominated the hero and
+     fought the headline for attention. It is ambience behind the words, not
+     a foreground effect. */
+  if (rHero) rHero.alpha(0.20, 0.15);
+  RIPPLES = [rGlobal, rHero].filter(Boolean);
+
+  window.addEventListener('resize', function(){ RIPPLES.forEach(function(r){ r.resize(); }); });
+  window.addEventListener('pointerdown', function(ev){
+    RIPPLES.forEach(function(r){ r.at(ev.clientX, ev.clientY); });
+  }, { passive:true });
+  window.setInterval(function(){
+    if (document.hidden) return;
+    RIPPLES.forEach(function(r){ r.ambient(); });
+  }, 4600);
+}
+
+/* ============================================================ interactions
+   Pointer- and scroll-driven polish. All of it is additive: every effect
+   writes a custom property or a transform that defaults to neutral, so with
+   JS disabled the page is simply calmer, never broken. Skipped wholesale
+   under prefers-reduced-motion. */
+if (!REDUCED){
+
+  /* --- scroll progress bar ------------------------------------------- */
+  var bar = $('#progress');
+  var ticking = false;
+
+  function onFrame(){
+    ticking = false;
+    var y = window.scrollY;
+    var max = document.documentElement.scrollHeight - window.innerHeight;
+    if (bar) bar.style.transform = 'scaleX(' + (max > 0 ? Math.min(1, y / max) : 0) + ')';
+  }
+  window.addEventListener('scroll', function(){
+    if (!ticking){ ticking = true; window.requestAnimationFrame(onFrame); }
+  }, { passive:true });
+  onFrame();
+
+  /* --- marquee -------------------------------------------------------- */
+  /**
+   * WHY THIS IS NOT A CSS ANIMATION.
+   *
+   * The first version ran `animation: marq var(--tick) linear infinite` and
+   * rewrote `--tick` from scroll velocity. Changing the duration of a
+   * *running* CSS animation makes the browser recompute its position as
+   * elapsed-time / new-duration, so every speed change teleported the strip
+   * sideways — at speed that reads as tearing. Any duration-based speed
+   * control has that failure built in.
+   *
+   * Integrating position instead (x -= speed * dt) and easing *speed* means a
+   * change in speed can only affect the next frame's delta, so position stays
+   * continuous. The CSS animation stays in the stylesheet as the no-JS
+   * fallback; this switches it off when it takes over.
+   */
+  (function(){
+    var track = $('#ticker'), band = $('.ticker');
+    if (!track || !band) return;
+    var BASE = 70, MAX_BOOST = 260;
+    var x = 0, half = track.scrollWidth / 2, speed = BASE, target = BASE;
+    var paused = false, last = 0, lastTY = window.scrollY;
+
+    track.style.animation = 'none';
+    if (window.ResizeObserver){
+      new ResizeObserver(function(){ half = track.scrollWidth / 2; }).observe(track);
+    }
+
+    window.addEventListener('scroll', function(){
+      var dy = Math.abs(window.scrollY - lastTY);
+      lastTY = window.scrollY;
+      target = Math.min(BASE + MAX_BOOST, BASE + dy * 12);
+    }, { passive:true });
+
+    band.addEventListener('pointerenter', function(){ paused = true; });
+    band.addEventListener('pointerleave', function(){ paused = false; });
+
+    (function step(now){
+      var dt = last ? Math.min(50, now - last) : 16; last = now;
+      target += (BASE - target) * 0.05;
+      speed += (target - speed) * 0.07;
+      if (!paused && half > 0){
+        x -= (speed * dt) / 1000;
+        if (x <= -half) x += half;
+        track.style.transform = 'translate3d(' + x.toFixed(2) + 'px,0,0)';
+      }
+      window.requestAnimationFrame(step);
+    })(0);
+  })();
+
+  /* --- card tilt + cursor sheen --------------------------------------- */
+  /* JS owns the hover transform here (the stylesheet deliberately does not
+     set one) so the lift and the 3D angle compose in a single value. */
+  $$('.card-hard').forEach(function(card){
+    var raf = 0, tx = 0, ty = 0;
+    function apply(){
+      raf = 0;
+      if (!card.classList.contains('lift')) return;
+      card.style.transform =
+        'translate3d(-3px,-3px,0) perspective(760px) rotateX(' + ty.toFixed(2) +
+        'deg) rotateY(' + tx.toFixed(2) + 'deg)';
+    }
+    card.addEventListener('pointermove', function(e){
+      var r = card.getBoundingClientRect();
+      var px = (e.clientX - r.left) / r.width;
+      var py = (e.clientY - r.top) / r.height;
+      card.style.setProperty('--mx', (px * 100).toFixed(1) + '%');
+      card.style.setProperty('--my', (py * 100).toFixed(1) + '%');
+      tx = (px - 0.5) * 7;          // rotateY: left/right
+      ty = -(py - 0.5) * 7;         // rotateX: up/down
+      if (!raf) raf = window.requestAnimationFrame(apply);
+    });
+    card.addEventListener('pointerleave', function(){
+      card.style.transform = '';
+      card.style.removeProperty('--mx');
+      card.style.removeProperty('--my');
+    });
+  });
+
+  /* --- magnetic buttons ----------------------------------------------- */
+  $$('.btn').forEach(function(b){
+    b.addEventListener('pointermove', function(e){
+      var r = b.getBoundingClientRect();
+      var dx = (e.clientX - (r.left + r.width / 2)) / (r.width / 2);
+      var dy = (e.clientY - (r.top + r.height / 2)) / (r.height / 2);
+      b.style.setProperty('--mgx', (dx * 5).toFixed(1) + 'px');
+      b.style.setProperty('--mgy', (dy * 3.5).toFixed(1) + 'px');
+    });
+    b.addEventListener('pointerleave', function(){
+      b.style.removeProperty('--mgx');
+      b.style.removeProperty('--mgy');
+    });
+  });
+}
+
+/* ============================================================== animations
+   Every scroll reveal is fromTo(..., immediateRender:false, once:true).
+   That is the whole reason the page cannot end up blank: the element's
+   resting CSS state is its final state, and GSAP only ever animates *into*
+   it. No CSS anywhere sets opacity:0 on content. */
+function animate(){
+  if (REDUCED || !HAS_GSAP) return;
+  try {
+    var e = gsap.timeline({ defaults:{ ease:'back.out(1.5)', duration:.8 } });
+    e.from('[data-hero="badge"]', { y:-18, opacity:0 })
+     .from('[data-hero="t1"], [data-hero="t2"]', { y:34, opacity:0, stagger:.12 }, '-=.45')
+     .from('[data-hero="sub"]',   { y:24, opacity:0 }, '-=.45')
+     .from('[data-hero="cta"] > *', { scale:.9, opacity:0, stagger:.1 }, '-=.4')
+     .from('[data-hero="chips"] > *', { y:16, opacity:0, stagger:.06 }, '-=.5')
+     .from('[data-hero="hint"]',  { opacity:0 }, '-=.4')
+     .from('[data-hero="mascot"]',{ scale:.7, rotation:-8, opacity:0, ease:'back.out(1.7)', duration:1 }, '-=1.1')
+     .from('[data-hero="code"]',  { x:-50, rotation:-12, opacity:0, duration:.9 }, '-=.7');
+
+    gsap.to('[data-hero="mascot"]', { y:14, duration:3, ease:'sine.inOut', yoyo:true, repeat:-1 });
+    gsap.to('[data-hero="code"]',   { y:10, duration:3.4, ease:'sine.inOut', yoyo:true, repeat:-1 });
+    gsap.to('.reg-art',             { y:10, duration:3.2, ease:'sine.inOut', yoyo:true, repeat:-1 });
+
+    if (!HAS_ST) return;
+
+    gsap.to('.hero-art',  { y:110, ease:'none',
+      scrollTrigger:{ trigger:'.hero', start:'top top', end:'bottom top', scrub:true } });
+    gsap.to('.hero-copy', { y:-60, ease:'none',
+      scrollTrigger:{ trigger:'.hero', start:'top top', end:'bottom top', scrub:true } });
+
+    var rv = function(sel, from, extra){
+      $$(sel).forEach(function(el){
+        gsap.fromTo(el, from, Object.assign({
+          x:0, y:0, opacity:1, rotation:0, scale:1, duration:.8, ease:'power3.out',
+          immediateRender:false,
+          scrollTrigger:{ trigger:el, start:'top 88%', once:true }
+        }, extra || {}));
+      });
+    };
+    rv('[data-rv="kicker"]', { x:-34, opacity:0 });
+    rv('[data-rv="ticker"]', { y:40,  opacity:0 });
+    rv('[data-rv="sub"]',    { y:22,  opacity:0, filter:'blur(9px)' }, { filter:'blur(0px)' });
+
+    /**
+     * Headings resolve one word at a time, each tipping up out of the page.
+     * The spans come from splitHeadings(); if that never ran (or a language
+     * switch just replaced them) the selector simply finds nothing and the
+     * heading stays where it already is — visible.
+     */
+    $$('[data-rv="h2"]').forEach(function(h){
+      var words = h.querySelectorAll('.w');
+      if (!words.length) return;
+      gsap.fromTo(words,
+        { yPercent:110, opacity:0, rotateX:-72 },
+        { yPercent:0, opacity:1, rotateX:0, duration:.78, stagger:.055,
+          ease:'back.out(1.5)', immediateRender:false,
+          scrollTrigger:{ trigger:h, start:'top 88%', once:true } });
+    });
+
+    /**
+     * The gear entrance, for repeating card grids only.
+     *
+     * Outer columns swing in from their own edge, the middle rises straight
+     * up, and neighbouring columns turn opposite ways — a row meshes like a
+     * gear train rather than tilting in unison.
+     *
+     * One-way, by spec: the brief mandates
+     * `fromTo(..., immediateRender:false, once:true)`, and `immediateRender:
+     * false` is what guarantees content is visible if the GSAP CDN never
+     * loads. It also means GSAP renders *nothing* at time 0, so a reversed
+     * fromTo animates out and then pops back — worse than not reversing.
+     * The two-way reveal lives on the site, where the hidden state is a CSS
+     * class and has no such constraint.
+     */
+    $$('[data-stagger]').forEach(function(group){
+      gsap.fromTo(group.children,
+        { y:62, opacity:0, scale:.78, filter:'blur(9px)',
+          x:        function(i){ return i % 3 === 0 ? -110 : (i % 3 === 2 ? 110 : 0); },
+          rotation: function(i){ return i % 3 === 1 ? 28 : -28; } },
+        { y:0, x:0, opacity:1, scale:1, rotation:0, filter:'blur(0px)',
+          stagger:.12, duration:.95, ease:'back.out(1.5)', immediateRender:false,
+          scrollTrigger:{ trigger:group, start:'top 84%', once:true } });
+    });
+
+    /* Background doodles drift at their own rate — cheap depth, and it keeps
+       the fixed background from reading as a flat sheet behind a moving page. */
+    $$('.doodle').forEach(function(d, i){
+      gsap.to(d, { y:(i % 2 ? -120 : 150), rotation:(i % 2 ? 18 : -14), ease:'none',
+        scrollTrigger:{ start:0, end:'max', scrub:1.2 } });
+    });
+
+    var line = $('#stepsLine');
+    if (line) gsap.fromTo(line, { scaleX:0 }, { scaleX:1, duration:1.1, ease:'power2.out',
+      immediateRender:false, scrollTrigger:{ trigger:'.steps', start:'top 80%', once:true } });
+
+    var qc = $('#quoteCard');
+    if (qc) gsap.fromTo(qc, { rotation:-2.5, y:56, opacity:0 },
+      { rotation:0, y:0, opacity:1, duration:.95, ease:'power3.out', immediateRender:false,
+        scrollTrigger:{ trigger:qc, start:'top 86%', once:true } });
+
+    var pg = $('[data-price]');
+    if (pg) gsap.fromTo(pg.children, { y:64, opacity:0 },
+      { y:0, opacity:1, stagger:.15, duration:.9, ease:'power3.out', immediateRender:false,
+        scrollTrigger:{ trigger:pg, start:'top 84%', once:true } });
+
+    var cta = $('[data-cta]');
+    if (cta) gsap.fromTo(cta.children, { y:32, opacity:0 },
+      { y:0, opacity:1, stagger:.12, duration:.8, ease:'power3.out', immediateRender:false,
+        scrollTrigger:{ trigger:cta, start:'top 86%', once:true } });
+  } catch (err) {
+    /* An animation failure must never take the page with it. */
+  }
+}
+
+/* ==================================================================== boot */
+var yearEl = $('#year'); if (yearEl) yearEl.textContent = String(new Date().getFullYear());
+applyI18n();
+if (!window.location.hash) { try { window.history.replaceState(null,'','#/'); } catch(e){} }
+showPage(currentRoute());
+animate();
+
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,568 @@
+/* ==========================================================================
+   Block canvas editor
+
+   Reuses the ARDUINIUM design tokens (--paper, --ink, --blue …) declared in
+   src/styles.css, so this screen sits next to the rest of the app instead of
+   looking like a different product. Every selector is namespaced `bc-` to
+   keep it from leaking into the 3D workshop UI.
+   ========================================================================== */
+
+.bc-app {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  grid-template-rows: auto auto 1fr auto;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--font);
+  overflow: hidden;
+}
+
+/* ------------------------------------------------------------------ header */
+
+.bc-header {
+  display: flex;
+  align-items: baseline;
+  gap: var(--sp-3);
+  padding: var(--sp-3) var(--sp-4);
+  border-bottom: 1px solid var(--line);
+  background: var(--card);
+}
+
+.bc-header h1 {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+}
+
+.bc-sub {
+  margin: 0;
+  font-size: 12px;
+  color: var(--ink-3);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ----------------------------------------------------------------- toolbar */
+
+.bc-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: var(--sp-4);
+  padding: var(--sp-3) var(--sp-4);
+  border-bottom: 1px solid var(--line);
+  background: var(--card-2);
+}
+
+.bc-tool-group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+}
+
+.bc-tool-label {
+  font-size: 10px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--ink-3);
+}
+
+.bc-tool-row {
+  display: flex;
+  gap: var(--sp-1);
+}
+
+.bc-toolbar button {
+  min-height: 30px;
+  padding: 0 var(--sp-2);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-sm);
+  background: var(--card);
+  color: var(--ink);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 120ms var(--ease), border-color 120ms var(--ease);
+}
+
+.bc-toolbar button:hover:not(:disabled) {
+  background: var(--blue-soft);
+  border-color: var(--blue);
+}
+
+.bc-toolbar button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.bc-toolbar button.is-on {
+  background: var(--blue);
+  border-color: var(--blue);
+  color: #fff;
+}
+
+/* Palette buttons carry their block colour as a chip. */
+.bc-palette {
+  display: flex;
+  gap: var(--sp-1);
+}
+
+.bc-palette-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.bc-palette-chip {
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+  background: var(--swatch);
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.15);
+}
+
+/* -------------------------------------------------------------------- main */
+
+.bc-main {
+  display: grid;
+  grid-template-columns: 1fr 288px;
+  min-height: 0; /* lets the canvas actually shrink inside the grid row */
+}
+
+/* ------------------------------------------------------------------ canvas */
+
+.bc-viewport {
+  position: relative;
+  overflow: hidden;
+  background: var(--card-3);
+  /* The canvas is a drag surface; native text/image dragging fights every
+     gesture, and touch-action stops the browser panning underneath us. */
+  user-select: none;
+  touch-action: none;
+}
+
+.bc-world {
+  position: absolute;
+  top: 0;
+  left: 0;
+  transform-origin: 0 0;
+  background: var(--card);
+  box-shadow: var(--shadow-lift);
+}
+
+/* Grid lines are painted, not made of elements — a 40x26 board would
+   otherwise be 1040 divs doing nothing but drawing a square. */
+.bc-grid {
+  position: absolute;
+  inset: 0;
+  background-image: linear-gradient(to right, var(--line) 1px, transparent 1px),
+    linear-gradient(to bottom, var(--line) 1px, transparent 1px);
+  pointer-events: none;
+}
+
+.bc-block {
+  position: absolute;
+  border-radius: var(--r-sm);
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.18), 0 1px 2px rgba(56, 43, 22, 0.18);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 800;
+  overflow: hidden;
+  cursor: grab;
+}
+
+.bc-block.is-selected {
+  outline: 2px solid var(--ink);
+  outline-offset: -2px;
+}
+
+.bc-block.is-active {
+  outline: 3px solid #fff;
+  outline-offset: -3px;
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.3), 0 0 0 2px var(--ink), 0 4px 12px rgba(0, 0, 0, 0.25);
+}
+
+.bc-block.is-locked {
+  cursor: not-allowed;
+  /* Diagonal hatch reads as "fixed" without hiding the block's own colour. */
+  background-image: repeating-linear-gradient(
+    45deg,
+    rgba(255, 255, 255, 0.22) 0 6px,
+    transparent 6px 12px
+  );
+}
+
+.bc-block.is-hidden {
+  opacity: 0.22;
+}
+
+.bc-block.is-dragging {
+  opacity: 0.85;
+  cursor: grabbing;
+}
+
+.bc-block-nose {
+  position: absolute;
+  top: 2px;
+  font-size: 9px;
+  line-height: 1;
+  opacity: 0.85;
+  pointer-events: none;
+}
+
+.bc-block-label {
+  padding: 0 4px;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.bc-block-badge {
+  position: absolute;
+  right: 2px;
+  bottom: 1px;
+  font-size: 9px;
+  pointer-events: none;
+}
+
+/* Drag landing zone: green when the drop is legal, red when it overlaps or
+   leaves the grid. */
+.bc-preview {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 9000;
+}
+
+.bc-preview-cell {
+  position: absolute;
+  border-radius: 3px;
+}
+
+.bc-preview.is-valid .bc-preview-cell {
+  background: rgba(35, 160, 106, 0.28);
+  box-shadow: inset 0 0 0 1px var(--green);
+}
+
+.bc-preview.is-invalid .bc-preview-cell {
+  background: rgba(221, 83, 70, 0.3);
+  box-shadow: inset 0 0 0 1px var(--red);
+}
+
+/* One outline for the whole selection, so a group reads as a single object. */
+.bc-group-outline {
+  position: absolute;
+  border: 1.5px dashed var(--ink);
+  border-radius: var(--r-sm);
+  pointer-events: none;
+  z-index: 9500;
+}
+
+/* Marquee lives in screen space, outside the world transform, so it stays a
+   crisp 1px at any zoom. */
+.bc-marquee {
+  position: absolute;
+  border: 1.5px solid var(--blue);
+  background: rgba(47, 111, 217, 0.14);
+  border-radius: 2px;
+  pointer-events: none;
+  z-index: 10000;
+}
+
+/* --------------------------------------------------------------- inspector */
+
+.bc-inspector {
+  border-left: 1px solid var(--line);
+  background: var(--card);
+  padding: var(--sp-3);
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+}
+
+.bc-panel-title {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--ink-2);
+}
+
+.bc-empty {
+  margin: 0;
+  font-size: 12px;
+  color: var(--ink-3);
+  line-height: 1.5;
+}
+
+.bc-empty-sm {
+  font-size: 11px;
+}
+
+.bc-hint {
+  margin: 0;
+  padding: var(--sp-2);
+  border-radius: var(--r-sm);
+  background: var(--blue-soft);
+  color: var(--ink-2);
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.bc-field {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.bc-field label,
+.bc-field-legend {
+  font-size: 10px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--ink-3);
+}
+
+.bc-field input[type='text'],
+.bc-field input[type='number'] {
+  width: 100%;
+  min-height: 30px;
+  padding: 0 var(--sp-2);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-sm);
+  background: var(--card-2);
+  color: var(--ink);
+  font: inherit;
+  font-size: 12px;
+}
+
+.bc-field input:focus-visible,
+.bc-prop-row input:focus-visible {
+  outline: 2px solid var(--blue);
+  outline-offset: -1px;
+}
+
+.bc-grid-2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--sp-2);
+}
+
+.bc-swatches {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.bc-swatch {
+  width: 24px;
+  height: 24px;
+  border: 2px solid transparent;
+  border-radius: var(--r-sm);
+  cursor: pointer;
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.18);
+}
+
+.bc-swatch.is-on {
+  border-color: var(--ink);
+}
+
+.bc-color-input {
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-sm);
+  background: none;
+  cursor: pointer;
+}
+
+/* Segmented control for rotation. */
+.bc-seg {
+  display: flex;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-sm);
+  overflow: hidden;
+}
+
+.bc-seg button {
+  flex: 1;
+  min-height: 28px;
+  border: 0;
+  border-right: 1px solid var(--line);
+  background: var(--card-2);
+  color: var(--ink-2);
+  font: inherit;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.bc-seg button:last-child {
+  border-right: 0;
+}
+
+.bc-seg button.is-on {
+  background: var(--blue);
+  color: #fff;
+}
+
+.bc-checks {
+  display: flex;
+  gap: var(--sp-3);
+}
+
+.bc-checks label {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--ink-2);
+  cursor: pointer;
+}
+
+.bc-props {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding-top: var(--sp-2);
+  border-top: 1px solid var(--line);
+}
+
+.bc-prop-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr auto;
+  gap: 4px;
+}
+
+.bc-prop-row input {
+  min-width: 0;
+  min-height: 26px;
+  padding: 0 6px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-sm);
+  background: var(--card-2);
+  font: inherit;
+  font-size: 11px;
+  color: var(--ink);
+}
+
+.bc-prop-row button {
+  min-height: 26px;
+  padding: 0 8px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-sm);
+  background: var(--card);
+  font: inherit;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--ink-2);
+  cursor: pointer;
+}
+
+.bc-prop-row button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.bc-id {
+  margin: 0;
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--ink-3);
+  word-break: break-all;
+}
+
+/* ------------------------------------------------------------------ footer */
+
+.bc-footer {
+  border-top: 1px solid var(--line);
+  background: var(--card-2);
+  padding: 6px var(--sp-4);
+}
+
+.bc-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-1) var(--sp-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.bc-legend li {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  color: var(--ink-3);
+}
+
+.bc-legend kbd {
+  padding: 1px 5px;
+  border: 1px solid var(--line-strong);
+  border-radius: 4px;
+  background: var(--card);
+  box-shadow: var(--shadow-key);
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--ink-2);
+}
+
+/* ------------------------------------------------------------------ toasts */
+
+.bc-toasts {
+  position: fixed;
+  right: var(--sp-4);
+  bottom: 56px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  pointer-events: none;
+  z-index: 20000;
+}
+
+.bc-toast {
+  padding: 8px var(--sp-3);
+  border-radius: var(--r-md);
+  background: var(--ink);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 700;
+  box-shadow: var(--shadow-lift);
+}
+
+.bc-toast.is-warn {
+  background: var(--red);
+}
+
+.bc-toast.is-good {
+  background: var(--green);
+}
+
+/* ------------------------------------------------------------- responsive */
+
+@media (max-width: 860px) {
+  .bc-main {
+    grid-template-columns: 1fr;
+    grid-template-rows: 1fr auto;
+  }
+
+  .bc-inspector {
+    border-left: 0;
+    border-top: 1px solid var(--line);
+    max-height: 42vh;
+  }
+}

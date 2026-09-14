@@ -1,0 +1,42 @@
+node_modules
+dist
+dist-single
+shots
+.next
+next-env.d.ts
+tsconfig.tsbuildinfo
+
+# Secrets. `.env.example` is committed and documents every variable; the real
+# values — including SUPABASE_SERVICE_ROLE_KEY and ANTHROPIC_API_KEY — live
+# only here and in the deployment's own settings.
+.env
+.env.local
+.env.*.local
+
+# Local editor and tooling configuration. Machine-specific, reinstallable, and
+# no more part of the project than node_modules is. Some of these are written
+# automatically by `next dev` (see generate-agent-files.js), so they reappear on
+# their own and must stay ignored rather than merely deleted.
+#
+# The architecture notes that belong to the project live in ARCHITECTURE.md,
+# which IS committed.
+.agents/
+.claude/
+.codex/
+debug.log
+AGENTS.md
+CLAUDE.md
+skills-lock.json
+
+# Test reports and local tooling output.
+coverage/
+playwright-report/
+test-results/
+*.log
+*.tmp
+
+# Machine-specific editor settings.
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

@@ -1,0 +1,84 @@
+ARDUINIUM — animated background
+Brief for the hero (/) and registration (/register) backgrounds.
+
+Implemented in app/globals.css as `.ard-gradient`, wrapped by
+components/site/gradient-bg.tsx. This file is the intent behind it; the CSS is
+the implementation.
+
+--------------------------------------------------------------------------
+WHAT IT IS
+--------------------------------------------------------------------------
+
+A warm, slow, ambient field of colour behind the hero copy. Four soft lamps
+drifting across a cream page — as if light were falling across a workbench,
+not as if a SaaS template had a gradient applied to it.
+
+It sits UNDER the interactive perfboard grid. The gradient is soft colour with
+no edges; the grid is small hard dots. Layering them reads as a lit circuit
+board. Two effects of the same visual weight would fight.
+
+--------------------------------------------------------------------------
+PALETTE — no colour outside this list
+--------------------------------------------------------------------------
+
+  base      #F8F1DE   cream page, always the ground
+  orange    #D9612F   power / LED motif, at ~34% opacity
+  teal      #1E8F82   signal / circuit motif, at ~32% opacity
+  navy-2    #28495F   depth, at ~22% opacity, anchored LOW
+
+Explicitly forbidden: purple, magenta, indigo, electric blue, any two-stop
+"vibrant" linear gradient, any mesh-gradient generator output. Those are the
+visual signature of a generic AI-generated SaaS page and the product's whole
+claim is that it is not one.
+
+--------------------------------------------------------------------------
+MOTION
+--------------------------------------------------------------------------
+
+Each lamp drifts and scales on its own long cycle:
+
+  orange   19s
+  teal     23s
+  navy-2   27s
+
+The three periods are mutually prime, so the composition never visibly
+repeats — no moment where a viewer recognises "it just looped".
+
+  - ease-in-out, alternating direction
+  - translate + scale ONLY. No background-position, no filter animation, no
+    hue rotation. Transform stays on the compositor; the others force paint
+    every frame and will drop the hero to single-digit FPS on a school laptop,
+    which is precisely the machine this has to run on.
+  - blur(58px) applied once, statically, never animated.
+
+--------------------------------------------------------------------------
+CONTRAST — non-negotiable
+--------------------------------------------------------------------------
+
+The headline sits on top of this. Peak opacity of any lamp is capped so that
+navy #1C3547 text over the busiest point of the animation still clears
+WCAG AA. The navy lamp is anchored to the BOTTOM of the hero for this reason:
+it is the darkest field and the headline is at the top.
+
+If a colour has to get louder to look good, the answer is a bigger, softer,
+more transparent shape — not a more saturated one.
+
+--------------------------------------------------------------------------
+ACCESSIBILITY
+--------------------------------------------------------------------------
+
+@media (prefers-reduced-motion: reduce) stops the drift and keeps the
+composition. The page still looks designed; it does not fall back to a flat
+rectangle. Nothing about the layout depends on the animation running.
+
+--------------------------------------------------------------------------
+WHERE IT APPEARS
+--------------------------------------------------------------------------
+
+  /            hero section only, behind the ripple grid
+  /register    full section, no grid over it — the role cards and the form are
+               the focus there, and a second interactive layer under a form is
+               a distraction rather than an invitation.
+
+Nowhere else. It is the arrival moment; using it on every section would make
+it wallpaper.

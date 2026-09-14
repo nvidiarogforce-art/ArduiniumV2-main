@@ -1,0 +1,40 @@
+.app .sensor-lab { margin: 12px; border: 1px solid #cbdcd3; border-radius: 12px; background: #f7faf7; overflow: hidden; }
+.app .sensor-lab summary { cursor: pointer; padding: 13px; font-size: 13px; font-weight: 800; color: #215c49; }
+.app .lab-count { float: right; min-width: 23px; text-align: center; border-radius: 5px; background: #dcebe2; }
+.app .lab-sensor { padding: 14px; border-top: 1px solid #dce7e0; }
+.app .lab-sensor-heading, .app .lab-chart-caption { display: flex; justify-content: space-between; gap: 8px; }
+.app .lab-sensor-heading { font-size: 13px; }
+.app .lab-ready { color: #13744e; white-space: nowrap; }
+.app .lab-warning, .app .lab-connection-warning { color: #9b5420; }
+.app .lab-readout { display: flex; align-items: baseline; gap: 6px; margin-top: 10px; font-family: var(--mono); }
+.app .lab-readout strong { font-size: 30px; font-variant-numeric: tabular-nums; color: #173f33; }
+.app .lab-readout small { margin-left: auto; font: 10px var(--font); color: #4d6070; text-align: right; }
+.app .lab-chart { width: 100%; height: 54px; margin-top: 8px; }
+.app .lab-chart-caption { font-size: 9px; color: #536b61; }
+.app .lab-sensor p, .app .lab-environment p, .app .lab-empty p { font-size: 11px; line-height: 1.55; margin: 9px 0; }
+.app .lab-sensor-actions, .app .lab-part-actions { display: flex; gap: 6px; margin-top: 9px; }
+.app .lab-sensor-actions button, .app .lab-part-actions button, .app .lab-empty button { background: #fff; border: 1px solid #b5cfc0; border-radius: 7px; padding: 8px; font-size: 11px; font-weight: 700; min-height: 38px; flex: 1; }
+.app .lab-sensor-actions button:hover, .app .lab-part-actions button:hover { background: #e3f1e8; }
+.app .lab-sensor-actions button:disabled, .app .lab-transform button:disabled { opacity: .45; cursor: default; }
+.app .lab-empty { padding: 0 14px 14px; }
+.app .lab-environment { border: 0; border-top: 1px solid #d0ded4; padding: 14px; margin: 4px 0 0; }
+.app .lab-environment legend { font-size: 11px; font-weight: 800; color: #365448; padding: 0 5px; }
+.app .lab-environment label { display: block; margin-bottom: 12px; font-size: 12px; }
+.app .lab-environment output { float: right; font: 11px var(--mono); }
+.app .lab-environment input { display: block; width: 100%; accent-color: #16805e; margin-top: 10px; min-height: 24px; }
+.app .lab-environment button { width: 100%; min-height: 40px; border: 1px solid #b5cfc0; border-radius: 8px; background: #fff; color: #215c49; font-size: 12px; font-weight: 800; }
+.app .lab-environment button.is-pressed { transform: translateY(2px); background: #215c49; color: #fff; box-shadow: inset 0 2px 5px rgba(0,0,0,.2); }
+.app .lab-transform { margin: 12px 0; padding: 12px; border: 1px solid #e0ded5; border-radius: 9px; background: #faf8f2; }
+.app .lab-transform h5 { margin: 0 0 10px; font-size: 12px; }
+.app .lab-coordinates { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 5px; }
+.app .lab-coordinate { display: flex; flex-direction: column; gap: 4px; font: 11px var(--mono); }
+.app .lab-coordinate input { width: 100%; min-width: 0; min-height: 36px; border: 1px solid #d2d5d2; background: white; padding: 5px; border-radius: 5px; font-size: 11px; }
+.app .lab-transform small { display: block; margin: 7px 0; font-size: 10px; color: #526270; }
+.app .lab-axis-x { color: #b4493a; } .app .lab-axis-y { color: #23784f; } .app .lab-axis-z { color: #2c60aa; }
+.app .lab-rotation { display: flex; gap: 5px; margin: 10px 0; }
+.app .lab-rotation > div { display: flex; flex: 1; align-items: center; gap: 3px; font: 11px var(--mono); }
+.app .lab-rotation button { background: white; border: 1px solid #dedcd5; border-radius: 5px; flex: 1; min-height: 36px; font-size: 20px; }
+.app .lab-snap-toggle { display: flex; gap: 8px; font-size: 12px; align-items: center; margin-top: 12px; }
+.app .lab-snap-toggle input { accent-color: #23784f; }
+.app .sensor-lab button:focus-visible, .app .lab-transform button:focus-visible { outline: 3px solid #ef8b2c; outline-offset: 2px; }
+@media (max-width: 700px) { .app .lab-sensor-actions button, .app .lab-part-actions button, .app .lab-rotation button { min-height: 44px; } }

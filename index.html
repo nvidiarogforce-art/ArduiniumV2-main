@@ -1,0 +1,18 @@
+<!doctype html>
+<!--
+  `ard-sandbox-page` is what switches on the full-screen, no-page-scroll
+  layout rules in src/styles.css. The standalone app is always in that mode;
+  the Next.js site toggles the same class only while /learn/simulator is
+  mounted. See the SCOPING note in src/styles.css.
+-->
+<html lang="en" class="ard-sandbox-page">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>ARDUINIUM — Robotics Workshop</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.jsx"></script>
+  </body>
+</html>

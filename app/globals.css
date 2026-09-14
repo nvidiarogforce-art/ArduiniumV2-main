@@ -1,0 +1,677 @@
+@import 'tailwindcss';
+
+/* ==========================================================================
+   ARDUINIUM — site design system
+   ==========================================================================
+
+   Design concept: "perfboard".
+
+   The product is a board with holes on a 2.54 mm pitch, so the site is laid
+   out on a visible engineering grid rather than the usual soft SaaS canvas.
+   Sections are joined by drawn PCB traces with solder pads; the accent
+   colours carry fixed electrical meanings (orange = power/CTA, teal =
+   signal/success); and every interactive surface uses one offset hard shadow,
+   which reads as retro screen-print rather than as a drop-shadow default.
+
+   IMPORTANT — variable naming. The 3D sandbox (`src/styles.css`) ships its
+   own `:root` block using bare names: --card, --teal, --orange, --ink,
+   --paper. Both stylesheets are live at the same time on /learn/simulator.
+   Tailwind v4 namespaces everything here as --color-*, which cannot collide.
+   Any additional variable of our own is prefixed --ard-* for the same reason.
+   Never introduce a bare --card / --teal / --orange here.
+   ========================================================================== */
+
+@theme {
+  /* ---- Section 4.1 palette. The only colours in the product. ---- */
+  --color-navy: #1c3547; /* primary text, borders, dark surfaces */
+  --color-navy-2: #28495f; /* lighter navy, secondary dark surface */
+  --color-bg: #f8f1de; /* page background */
+  --color-bg-alt: #f1e7cc; /* alternating sections, input fields */
+  --color-card: #fffcf4; /* card + panel background */
+  --color-orange: #d9612f; /* primary CTA, LED / power motif */
+  --color-teal: #1e8f82; /* signal, circuit, success motif */
+  --color-slate: #7e93a7; /* neutral UI accents */
+  --color-gray: #8d8d89; /* muted text, disabled */
+  --color-pink: #d6247a; /* achievements only — used exactly twice sitewide */
+
+  --font-display: var(--ard-font-display), 'Segoe UI', system-ui, sans-serif;
+  --font-sans: var(--ard-font-sans), 'Segoe UI', system-ui, sans-serif;
+  --font-mono: var(--ard-font-mono), ui-monospace, Consolas, monospace;
+
+  /* One shadow scale, three depths. Pressed state removes it entirely. */
+  --shadow-hard-sm: 2px 2px 0 var(--color-navy);
+  --shadow-hard: 3px 3px 0 var(--color-navy);
+  --shadow-hard-lg: 5px 5px 0 var(--color-navy);
+}
+
+/* ============================================================ base layer */
+
+@layer base {
+  html {
+    scroll-behavior: smooth;
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    background-color: var(--color-bg);
+    color: var(--color-navy);
+    font-family: var(--font-sans);
+    font-size: 15.5px;
+    line-height: 1.62;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  h1,
+  h2,
+  h3,
+  h4 {
+    font-family: var(--font-display);
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    line-height: 1.1;
+    text-wrap: balance;
+  }
+
+  p {
+    text-wrap: pretty;
+  }
+
+  /* Keyboard focus is orange so it never reads as a mistake-state, and it is
+     never removed — Section 9 asks for real focus-visible everywhere. */
+  :focus-visible {
+    outline: 3px solid var(--color-orange);
+    outline-offset: 2px;
+    border-radius: 4px;
+  }
+
+  ::selection {
+    background: var(--color-orange);
+    color: var(--color-bg);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    html {
+      scroll-behavior: auto;
+    }
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+}
+
+/* ======================================================== the perfboard */
+
+/**
+ * A dot grid on the real 2.54 mm-pitch proportion, scaled up to 26 px so it
+ * reads as texture rather than noise. This is the site's ground plane: it sits
+ * under every section, which is what makes the whole page feel like one
+ * continuous board instead of a stack of unrelated bands.
+ */
+.ard-perf {
+  background-image: radial-gradient(circle at center, color-mix(in srgb, var(--color-navy) 16%, transparent) 1.2px, transparent 1.3px);
+  background-size: 26px 26px;
+  background-position: 13px 13px;
+}
+
+.ard-perf-dense {
+  background-image: radial-gradient(circle at center, color-mix(in srgb, var(--color-navy) 22%, transparent) 1.1px, transparent 1.2px);
+  background-size: 16px 16px;
+}
+
+/* ============================================== animated hero background */
+
+/**
+ * Required by spec §7.1 / §7.2 on the hero and the registration page.
+ *
+ * Deliberately NOT a purple mesh gradient. Four soft radial lamps in the
+ * brand palette drift across the cream page on long, offset cycles, so the
+ * loop never visibly repeats. Transform-only animation (no background-position
+ * or filter), which keeps it on the compositor at 60fps.
+ */
+.ard-gradient {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  background: var(--color-bg);
+}
+
+.ard-gradient::before,
+.ard-gradient::after,
+.ard-gradient > i {
+  content: '';
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(58px);
+  will-change: transform;
+}
+
+/* orange — power */
+.ard-gradient::before {
+  width: 46vw;
+  height: 46vw;
+  min-width: 320px;
+  min-height: 320px;
+  left: -8vw;
+  top: -14vw;
+  background: color-mix(in srgb, var(--color-orange) 34%, transparent);
+  animation: ard-drift-a 19s ease-in-out infinite alternate;
+}
+
+/* teal — signal */
+.ard-gradient::after {
+  width: 40vw;
+  height: 40vw;
+  min-width: 280px;
+  min-height: 280px;
+  right: -6vw;
+  top: 8vw;
+  background: color-mix(in srgb, var(--color-teal) 32%, transparent);
+  animation: ard-drift-b 23s ease-in-out infinite alternate;
+}
+
+/* navy — depth, anchored low so the hero copy keeps contrast at the top */
+.ard-gradient > i {
+  width: 52vw;
+  height: 34vw;
+  min-width: 340px;
+  left: 22vw;
+  bottom: -18vw;
+  background: color-mix(in srgb, var(--color-navy-2) 22%, transparent);
+  animation: ard-drift-c 27s ease-in-out infinite alternate;
+}
+
+@keyframes ard-drift-a {
+  from {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  to {
+    transform: translate3d(14vw, 9vw, 0) scale(1.18);
+  }
+}
+@keyframes ard-drift-b {
+  from {
+    transform: translate3d(0, 0, 0) scale(1.1);
+  }
+  to {
+    transform: translate3d(-12vw, 12vw, 0) scale(0.92);
+  }
+}
+@keyframes ard-drift-c {
+  from {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  to {
+    transform: translate3d(-16vw, -7vw, 0) scale(1.22);
+  }
+}
+
+/* Reduced motion: keep the composition, drop the movement. The page still
+   looks designed rather than falling back to a flat rectangle. */
+@media (prefers-reduced-motion: reduce) {
+  .ard-gradient::before,
+  .ard-gradient::after,
+  .ard-gradient > i {
+    animation: none;
+  }
+}
+
+/* ===================================================== ripple perfboard */
+
+/**
+ * Paired with components/site/ripple-grid.tsx. Propagation is expressed as a
+ * per-cell `animation-delay` written by that component, which is why a click
+ * costs exactly one timer regardless of how many cells are on screen.
+ */
+.ard-ripple {
+  display: grid;
+  justify-content: center;
+  align-content: center;
+  cursor: crosshair;
+}
+
+.ard-ripple > span {
+  position: relative;
+  border-radius: 2px;
+}
+
+/* The resting hole: a small ring, the same pitch idea as the board itself. */
+.ard-ripple > span::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  margin: auto;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--color-navy) 26%, transparent);
+  transition: none;
+}
+
+.ard-ripple > span.is-lit::before {
+  animation: ard-ripple-cell 700ms ease-out both;
+  animation-delay: var(--ard-ripple-delay, 0ms);
+}
+
+/**
+ * Peak intensity is deliberately restrained.
+ *
+ * The first version went to solid teal at 2.5x, which looked good on an empty
+ * background and made the hero headline hard to read the moment a wave passed
+ * under it — worst on mobile, where the copy spans the full width and sits
+ * directly over the grid. Hero text legibility is not negotiable for a
+ * decorative layer, so the lit state stays translucent and small enough that
+ * it reads as a signal travelling *behind* the words.
+ */
+@keyframes ard-ripple-cell {
+  0% {
+    background: color-mix(in srgb, var(--color-navy) 26%, transparent);
+    transform: scale(1);
+  }
+  35% {
+    background: color-mix(in srgb, var(--color-teal) 55%, transparent);
+    transform: scale(1.75);
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-teal) 12%, transparent);
+  }
+  60% {
+    background: color-mix(in srgb, var(--color-orange) 45%, transparent);
+    transform: scale(1.5);
+  }
+  100% {
+    background: color-mix(in srgb, var(--color-navy) 26%, transparent);
+    transform: scale(1);
+    box-shadow: 0 0 0 0 transparent;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ard-ripple {
+    cursor: default;
+  }
+  .ard-ripple > span.is-lit::before {
+    animation: none;
+  }
+}
+
+/* ================================================== scroll-reveal helper */
+
+/**
+ * Hidden is OPT-IN, keyed on the attribute the component writes. With no
+ * attribute — server render, no JS, hydration failure — the content is simply
+ * visible. See the header comment in components/site/reveal.tsx for why that
+ * inversion is not optional.
+ */
+.ard-reveal {
+  transition:
+    opacity 0.55s cubic-bezier(0.22, 0.61, 0.36, 1),
+    transform 0.55s cubic-bezier(0.22, 0.61, 0.36, 1);
+}
+
+.ard-reveal[data-shown='false'] {
+  opacity: 0;
+  transform: translateY(18px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ard-reveal[data-shown='false'] {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* ==================================================== LED blink accents */
+
+/**
+ * The one piece of ambient motion allowed outside the hero: a slow pulse on
+ * the small orange "power" dots that mark section headings, matching the LED
+ * at the apex of the logo mark.
+ */
+.ard-led {
+  animation: ard-led 2.6s ease-in-out infinite;
+}
+
+@keyframes ard-led {
+  0%,
+  100% {
+    opacity: 1;
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--color-orange) 55%, transparent);
+  }
+  50% {
+    opacity: 0.72;
+    box-shadow: 0 0 0 5px color-mix(in srgb, var(--color-orange) 0%, transparent);
+  }
+}
+
+/* ==========================================================================
+   LANDING — the "workbench" system
+   ==========================================================================
+   Three fixed background layers, a click ripple, dark bands, and the motion
+   that goes with them.
+
+   The one rule that governs all of it: decoration lives BEHIND content and
+   never intercepts a pointer. An earlier version put the ripple canvas above
+   the page and waves washed over headlines and cards, which read as the page
+   glitching rather than responding.
+   ========================================================================== */
+
+.ard-bg-layer,
+.ard-bg-glow,
+.ard-bg-grid,
+.ard-fx {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+}
+
+.ard-bg-layer {
+  z-index: -5;
+  background: linear-gradient(
+    118deg,
+    var(--color-bg) 0%,
+    var(--color-bg-alt) 28%,
+    color-mix(in srgb, var(--color-teal) 9%, var(--color-bg)) 52%,
+    color-mix(in srgb, var(--color-orange) 10%, var(--color-bg)) 78%,
+    var(--color-bg) 100%
+  );
+  background-size: 300% 300%;
+  animation: ard-grad 18s ease-in-out infinite alternate;
+}
+
+.ard-bg-glow {
+  z-index: -4;
+  background:
+    radial-gradient(38vw 38vw at 12% 18%, color-mix(in srgb, var(--color-teal) 16%, transparent), transparent 70%),
+    radial-gradient(34vw 34vw at 86% 30%, color-mix(in srgb, var(--color-orange) 14%, transparent), transparent 70%),
+    radial-gradient(30vw 30vw at 50% 88%, color-mix(in srgb, var(--color-pink) 8%, transparent), transparent 70%);
+  animation: ard-drift 22s ease-in-out infinite alternate;
+}
+
+.ard-bg-grid {
+  z-index: -3;
+  background-image:
+    linear-gradient(color-mix(in srgb, var(--color-navy) 8%, transparent) 1px, transparent 1px),
+    linear-gradient(90deg, color-mix(in srgb, var(--color-navy) 8%, transparent) 1px, transparent 1px);
+  background-size: 46px 46px;
+  -webkit-mask-image: radial-gradient(circle at 50% 42%, #000 42%, transparent 88%);
+  mask-image: radial-gradient(circle at 50% 42%, #000 42%, transparent 88%);
+}
+
+/* Page-level ripple: behind every layer of content. */
+.ard-fx {
+  z-index: -2;
+}
+
+@keyframes ard-grad {
+  from { background-position: 0% 50%; }
+  to { background-position: 100% 50%; }
+}
+@keyframes ard-drift {
+  from { transform: translate3d(0, 0, 0) scale(1); }
+  to { transform: translate3d(-4vw, 3vw, 0) scale(1.12); }
+}
+
+.ard-doodle {
+  position: absolute;
+  opacity: 0.14;
+  color: var(--color-navy);
+  animation: ard-float 10s ease-in-out infinite;
+  will-change: transform;
+}
+@keyframes ard-float {
+  0%, 100% { transform: translateY(0) rotate(0); }
+  50% { transform: translateY(-16px) rotate(4deg); }
+}
+
+/* ------------------------------------------------------------ dark bands */
+
+.ard-band-dark,
+.ard-page-dark {
+  color: var(--color-bg);
+  background: linear-gradient(
+    118deg,
+    var(--color-navy) 0%,
+    var(--color-navy-2) 34%,
+    color-mix(in srgb, var(--color-teal) 22%, var(--color-navy)) 58%,
+    color-mix(in srgb, var(--color-orange) 14%, var(--color-navy-2)) 80%,
+    var(--color-navy) 100%
+  );
+  background-size: 300% 300%;
+  animation: ard-grad 18s ease-in-out infinite alternate;
+}
+.ard-page-dark {
+  min-height: 100dvh;
+  animation-duration: 16s;
+}
+
+/* Hero ripple sits inside the band, still behind the band's own content. */
+.ard-fx-local {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+}
+
+.ard-kicker {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--color-orange);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+}
+.ard-kicker::before {
+  content: '';
+  width: 22px;
+  height: 3px;
+  border-radius: 2px;
+  background: var(--color-orange);
+}
+
+/* ---------------------------------------------------------------- ticker */
+
+.ard-ticker-wrap {
+  overflow: clip;
+  position: relative;
+  z-index: 2;
+}
+/* 100% wide in layout; the over-wide look is a transform, so it adds no
+   scrollable width. See the same note in prototype/index.html. */
+.ard-ticker {
+  width: 100%;
+  transform: rotate(-1deg) scale(1.045);
+  overflow: hidden;
+  background: var(--color-teal);
+  color: var(--color-bg);
+  border-block: 2px solid var(--color-navy);
+  padding: 14px 0;
+}
+.ard-ticker-track {
+  display: flex;
+  width: max-content;
+  animation: ard-marquee var(--ard-tick, 26s) linear infinite;
+}
+.ard-ticker-wrap:hover .ard-ticker-track {
+  animation-play-state: paused;
+}
+@keyframes ard-marquee {
+  from { transform: translateX(0); }
+  to { transform: translateX(-50%); }
+}
+
+/* -------------------------------------------------------------- progress */
+
+.ard-progress {
+  position: fixed;
+  inset: 0 0 auto 0;
+  height: 3px;
+  z-index: 200;
+  background: var(--color-orange);
+  transform: scaleX(0);
+  transform-origin: 0 50%;
+  pointer-events: none;
+  will-change: transform;
+}
+
+/* --------------------------------------------------------- word reveals */
+
+.ard-words {
+  perspective: 700px;
+}
+.ard-word {
+  display: inline-block;
+  will-change: transform, opacity;
+  transition:
+    transform 0.75s cubic-bezier(0.22, 0.68, 0.24, 1),
+    opacity 0.6s ease;
+}
+.ard-words[data-shown='false'] .ard-word {
+  opacity: 0;
+  transform: translateY(105%) rotateX(-70deg);
+}
+
+/* Blur-in is the signature of the reveal — it reads as the content resolving
+   into focus rather than merely sliding. Only ever applied to the hidden
+   state, so a failure leaves content sharp and visible.
+   The transition is on the base rule, not the hidden one, so it runs in both
+   directions — content folds away again on the way out. */
+.ard-rise[data-shown='false'] {
+  opacity: 0;
+  transform: translateY(46px) scale(0.94);
+  filter: blur(8px);
+}
+.ard-rise {
+  transition:
+    opacity 0.7s ease,
+    transform 0.8s cubic-bezier(0.22, 0.68, 0.24, 1),
+    filter 0.7s ease;
+}
+
+/**
+ * The gear entrance (see <Gear>).
+ *
+ * `--ard-gx` is the edge it swings in from and `--ard-gr` the direction it
+ * turns; both are written inline per card so neighbouring columns mesh in
+ * opposite directions. The overshoot in the timing function is what sells the
+ * cog "dropping into" its seat rather than sliding to a stop.
+ */
+.ard-gear {
+  transform-origin: 50% 50%;
+  transition:
+    opacity 0.55s ease,
+    transform 0.95s cubic-bezier(0.34, 1.5, 0.5, 1),
+    filter 0.6s ease;
+  will-change: transform, opacity;
+}
+.ard-gear[data-shown='false'] {
+  opacity: 0;
+  transform: translate3d(var(--ard-gx, 0px), 62px, 0) rotate(var(--ard-gr, 0deg)) scale(0.78);
+  filter: blur(9px);
+}
+
+/* ------------------------------------------------- card tilt + sheen */
+
+.ard-tilt {
+  position: relative;
+  transform-style: preserve-3d;
+  transition:
+    transform 0.24s cubic-bezier(0.22, 0.68, 0.24, 1),
+    box-shadow 0.2s ease;
+  will-change: transform;
+}
+.ard-tilt::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+  background: radial-gradient(
+    240px circle at var(--ard-mx, 50%) var(--ard-my, 50%),
+    color-mix(in srgb, var(--color-teal) 20%, transparent),
+    transparent 68%
+  );
+}
+.ard-tilt:hover::after {
+  opacity: 1;
+}
+.ard-tilt-dark::after {
+  background: radial-gradient(
+    240px circle at var(--ard-mx, 50%) var(--ard-my, 50%),
+    color-mix(in srgb, var(--color-orange) 26%, transparent),
+    transparent 68%
+  );
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ard-bg-layer,
+  .ard-bg-glow,
+  .ard-band-dark,
+  .ard-page-dark,
+  .ard-doodle,
+  .ard-ticker-track {
+    animation: none !important;
+  }
+  .ard-words[data-shown='false'] .ard-word,
+  .ard-rise[data-shown='false'],
+  .ard-gear[data-shown='false'] {
+    opacity: 1;
+    transform: none;
+    filter: none;
+  }
+  .ard-tilt {
+    transform: none !important;
+  }
+}
+
+/* ======================================================= sandbox bridge */
+
+/**
+ * The 3D sandbox is a full-viewport application, not a page section. Its own
+ * stylesheet is scoped to `.ard-sandbox-root` (see src/styles.css header), so
+ * this is the element that re-creates the layout context it expects: a fixed
+ * box with its own height and no page scroll, sitting under the site header.
+ */
+.ard-sandbox-root {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+  width: 100%;
+  overflow: hidden;
+  contain: layout paint;
+}
+
+/**
+ * `.app` is the sandbox's own root and declares `height: 100%`. A percentage
+ * height resolves against the parent's `height` property, which for a flex
+ * item is `auto` — so inside our flex column it would have collapsed to zero
+ * and the canvas would never have been given a size.
+ *
+ * Taking it out of flow against the (position: relative) stage gives it a
+ * definite containing block in both axes, which is what R3F's resize observer
+ * needs to pick a drawing-buffer size. Specificity 0,2,0 beats the sandbox's
+ * own 0,1,0 rule without editing that file.
+ */
+.ard-sandbox-root > .app {
+  position: absolute;
+  inset: 0;
+}
+
+/**
+ * The workshop's own toolbar opens with a brand block (mark, "ARDUINIUM",
+ * tagline). Embedded in the site that is the second wordmark within 54px of
+ * the first, which is exactly the visual tell of two products stapled
+ * together. Hidden here rather than edited out of `src/ui/TopBar.jsx`, so the
+ * standalone app — where it is the only branding on screen — keeps it, and so
+ * no sandbox file has to change for a purely presentational decision.
+ */
+.ard-sandbox-root .topbar > .brand {
+  display: none;
+}
